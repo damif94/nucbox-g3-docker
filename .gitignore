@@ -1,0 +1,71 @@
+# ------------------------------
+# nucbox-g3-docker: ignore runtime data
+# ------------------------------
+
+# OS/editor junk
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+
+# Node/Python caches (just in case)
+node_modules/
+__pycache__/
+*.pyc
+
+# ------------------------------
+# Secrets / env files
+# ------------------------------
+.env
+.env.*
+!.env.example
+!.env.sample
+!.env.template
+
+# ------------------------------
+# Docker runtime / volume data
+# (never commit these; they cause permission issues and churn)
+# ------------------------------
+**/data/
+**/mysql/
+**/mariadb/
+**/postgres/
+**/redis/
+**/influxdb/
+**/elasticsearch/
+**/mongodb/
+**/minio/
+**/cache/
+**/logs/
+**/log/
+**/tmp/
+
+# Nginx Proxy Manager / certs
+**/letsencrypt/
+**/acme/
+**/certs/
+**/ssl/
+**/nginx/certs/
+**/nginx/mysql/
+**/nginx/letsencrypt/
+
+# Portainer runtime
+portainer/data/
+
+# Tdarr runtime
+tdarr/config/
+tdarr/logs/
+tdarr/server/
+
+# Watchtower / other app state
+**/config/cache/
+**/config/logs/
+
+# ------------------------------
+# Git-crypt
+# (IMPORTANT: do NOT ignore .git-crypt — must be committed)
+# ------------------------------
+# .git-crypt/
