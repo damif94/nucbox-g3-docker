@@ -1,6 +1,6 @@
 # Migration Runbook: Pi → NucBox G3
 
-Migrating all Docker services from Raspberry Pi 4 (`192.168.1.131`) to GMKtec NucBox G3 (`192.168.1.100`). Downtime is accepted.
+Migrating all Docker services from Raspberry Pi 4 (`192.168.0.131`) to GMKtec NucBox G3 (`192.168.0.100`). Downtime is accepted.
 
 ---
 
@@ -8,7 +8,7 @@ Migrating all Docker services from Raspberry Pi 4 (`192.168.1.131`) to GMKtec Nu
 
 - [ ] All compose files committed and pulled on NucBox (`git pull`)
 - [ ] `.env` on NucBox populated with real values (copy from Pi's `/home/damian/docker/.env`)
-- [ ] SSH key access from NucBox to Pi works: `ssh damian@192.168.1.131`
+- [ ] SSH key access from NucBox to Pi works: `ssh damian@192.168.0.131`
 - [ ] Docker networks created on NucBox:
   ```bash
   docker network create services_shared
@@ -16,7 +16,7 @@ Migrating all Docker services from Raspberry Pi 4 (`192.168.1.131`) to GMKtec Nu
   ```
 - [ ] Check Toshiba data size vs `/srv/data` capacity:
   ```bash
-  ssh damian@192.168.1.131 "du -sh /srv/toshiba/data/*"
+  ssh damian@192.168.0.131 "du -sh /srv/toshiba/data/*"
   df -h /srv/data
   ```
 
@@ -35,7 +35,7 @@ No Toshiba needed. Can be done before everything else.
 **1a. Stop nginx on both sides:**
 ```bash
 # Pi
-ssh damian@192.168.1.131 "cd /home/damian/docker/nginx && docker compose --env-file /home/damian/docker/.env down"
+ssh damian@192.168.0.131 "cd /home/damian/docker/nginx && docker compose --env-file /home/damian/docker/.env down"
 
 # NucBox
 cd /home/damian/nucbox-g3-docker/nginx && docker compose --env-file ../.env down
@@ -43,10 +43,10 @@ cd /home/damian/nucbox-g3-docker/nginx && docker compose --env-file ../.env down
 
 **1b. Rsync nginx data Pi → NucBox** (run from NucBox):
 ```bash
-rsync -av damian@192.168.1.131:/home/damian/docker/nginx/data/        /home/damian/nucbox-g3-docker/nginx/data/
-rsync -av damian@192.168.1.131:/home/damian/docker/nginx/mysql/       /home/damian/nucbox-g3-docker/nginx/mysql/
-rsync -av damian@192.168.1.131:/home/damian/docker/nginx/letsencrypt/ /home/damian/nucbox-g3-docker/nginx/letsencrypt/
-rsync -av damian@192.168.1.131:/home/damian/docker/nginx/html/        /home/damian/nucbox-g3-docker/nginx/html/
+rsync -av damian@192.168.0.131:/home/damian/docker/nginx/data/        /home/damian/nucbox-g3-docker/nginx/data/
+rsync -av damian@192.168.0.131:/home/damian/docker/nginx/mysql/       /home/damian/nucbox-g3-docker/nginx/mysql/
+rsync -av damian@192.168.0.131:/home/damian/docker/nginx/letsencrypt/ /home/damian/nucbox-g3-docker/nginx/letsencrypt/
+rsync -av damian@192.168.0.131:/home/damian/docker/nginx/html/        /home/damian/nucbox-g3-docker/nginx/html/
 ```
 
 **1c. Start nginx on NucBox:**
@@ -56,9 +56,9 @@ docker compose logs -f
 ```
 
 **1d. Update router NAT:**
-In your router admin panel, change the port-forward target for ports 80 and 443 from `192.168.1.131` → `192.168.1.100`.
+In your router admin panel, change the port-forward target for ports 80 and 443 from `192.168.0.131` → `192.168.0.100`.
 
-Verify at `http://192.168.1.100:81` (NPM admin UI).
+Verify at `http://192.168.0.100:81` (NPM admin UI).
 
 ---
 
@@ -66,7 +66,7 @@ Verify at `http://192.168.1.100:81` (NPM admin UI).
 
 **2a. Stop all remaining Pi services:**
 ```bash
-ssh damian@192.168.1.131 << 'EOF'
+ssh damian@192.168.0.131 << 'EOF'
 cd /home/damian/docker/evolution-api && docker compose --env-file /home/damian/docker/.env down
 cd /home/damian/docker/n8n           && docker compose --env-file /home/damian/docker/.env down
 cd /home/damian/docker/emby          && docker compose --env-file /home/damian/docker/.env down
@@ -82,7 +82,7 @@ EOF
 
 Confirm nothing is left running on the Pi:
 ```bash
-ssh damian@192.168.1.131 "docker ps"
+ssh damian@192.168.0.131 "docker ps"
 ```
 
 **2b. Unplug Toshiba from Pi → plug into NucBox.**
@@ -131,11 +131,11 @@ docker compose logs -f
 ```bash
 sudo mkdir -p /home/damian/docker/{sonarr,radarr,bazarr,prowlarr,qbittorrent}/config
 
-rsync -av damian@192.168.1.131:/home/damian/docker/sonarr/config/      /home/damian/docker/sonarr/config/
-rsync -av damian@192.168.1.131:/home/damian/docker/radarr/config/      /home/damian/docker/radarr/config/
-rsync -av damian@192.168.1.131:/home/damian/docker/bazarr/config/      /home/damian/docker/bazarr/config/
-rsync -av damian@192.168.1.131:/home/damian/docker/prowlarr/config/    /home/damian/docker/prowlarr/config/
-rsync -av damian@192.168.1.131:/home/damian/docker/qbittorrent/config/ /home/damian/docker/qbittorrent/config/
+rsync -av damian@192.168.0.131:/home/damian/docker/sonarr/config/      /home/damian/docker/sonarr/config/
+rsync -av damian@192.168.0.131:/home/damian/docker/radarr/config/      /home/damian/docker/radarr/config/
+rsync -av damian@192.168.0.131:/home/damian/docker/bazarr/config/      /home/damian/docker/bazarr/config/
+rsync -av damian@192.168.0.131:/home/damian/docker/prowlarr/config/    /home/damian/docker/prowlarr/config/
+rsync -av damian@192.168.0.131:/home/damian/docker/qbittorrent/config/ /home/damian/docker/qbittorrent/config/
 ```
 
 **4b. Start services:**
@@ -156,11 +156,11 @@ cd /home/damian/nucbox-g3-docker/qbittorrent && docker compose --env-file ../.en
 sudo mkdir -p /home/damian/docker/emby/{config,cache}
 sudo mkdir -p /home/damian/docker/tdarr/{config,logs,server}
 
-rsync -av damian@192.168.1.131:/home/damian/docker/emby/config/  /home/damian/docker/emby/config/
-rsync -av damian@192.168.1.131:/home/damian/docker/emby/cache/   /home/damian/docker/emby/cache/
-rsync -av damian@192.168.1.131:/home/damian/docker/tdarr/config/ /home/damian/docker/tdarr/config/
-rsync -av damian@192.168.1.131:/home/damian/docker/tdarr/logs/   /home/damian/docker/tdarr/logs/
-rsync -av damian@192.168.1.131:/home/damian/docker/tdarr/server/ /home/damian/docker/tdarr/server/
+rsync -av damian@192.168.0.131:/home/damian/docker/emby/config/  /home/damian/docker/emby/config/
+rsync -av damian@192.168.0.131:/home/damian/docker/emby/cache/   /home/damian/docker/emby/cache/
+rsync -av damian@192.168.0.131:/home/damian/docker/tdarr/config/ /home/damian/docker/tdarr/config/
+rsync -av damian@192.168.0.131:/home/damian/docker/tdarr/logs/   /home/damian/docker/tdarr/logs/
+rsync -av damian@192.168.0.131:/home/damian/docker/tdarr/server/ /home/damian/docker/tdarr/server/
 ```
 
 **5b. Start services:**

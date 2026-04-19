@@ -15,7 +15,7 @@ This file contains project-specific context for Claude Code.
 - **Primary Access**: SSH (local network)
 - **SSH User**: damian
 - **Project Path**: `/home/damian/nucbox-g3-docker`
-- **LAN IP**: `192.168.1.100`
+- **LAN IP**: `192.168.0.100`
 
 ## Storage
 
@@ -112,7 +112,7 @@ Current whitelisted ports:
 ## Deployment Workflow
 
 1. Edit/commit from workstation and push
-2. SSH: `ssh damian@192.168.1.100`
+2. SSH: `ssh damian@192.168.0.100`
 3. Pull: `cd /home/damian/nucbox-g3-docker && git pull`
 4. Deploy: `cd <service> && docker compose --env-file ../.env up -d`
 5. Check: `docker compose logs -f`
