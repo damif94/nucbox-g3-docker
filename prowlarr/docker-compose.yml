@@ -1,0 +1,21 @@
+services:
+  prowlarr:
+    image: lscr.io/linuxserver/prowlarr:latest
+    container_name: prowlarr
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Montevideo
+    volumes:
+      - /home/damian/docker/prowlarr/config:/config
+    ports:
+      - "9696:9696"
+    restart: unless-stopped
+    networks:
+      - media
+
+networks:
+  media:
+    external: true

@@ -1,0 +1,30 @@
+services:
+  tdarr:
+    image: ghcr.io/haveagitgat/tdarr:latest
+    container_name: tdarr
+    restart: unless-stopped
+    environment:
+      - TZ=America/Montevideo
+      - PUID=1000
+      - PGID=1000
+      - UMASK_SET=002
+      - serverIP=0.0.0.0
+      - serverPort=8266
+      - webUIPort=8265
+      - internalNode=true
+      - nodeName=G3Node
+    volumes:
+      - /home/damian/docker/tdarr/config:/app/configs
+      - /home/damian/docker/tdarr/logs:/app/logs
+      - /home/damian/docker/tdarr/server:/app/server
+      - /srv/data:/data
+      - /tmp:/temp
+    ports:
+      - "8265:8265"
+      - "8266:8266"
+    networks:
+      - media
+
+networks:
+  media:
+    external: true

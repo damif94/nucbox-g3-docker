@@ -1,0 +1,22 @@
+services:
+  sonarr:
+    image: lscr.io/linuxserver/sonarr:latest
+    container_name: sonarr
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Montevideo
+    volumes:
+      - /home/damian/docker/sonarr/config:/config
+      - /srv/data:/data
+    ports:
+      - "8989:8989"
+    networks:
+      - media
+
+networks:
+  media:
+    external: true

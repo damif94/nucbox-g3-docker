@@ -1,0 +1,59 @@
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: n8n
+    restart: unless-stopped
+    user: "1000:1000"
+    ports:
+      - "5678:5678"
+    environment:
+      - N8N_HOST=${N8N_HOST}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=https
+      - WEBHOOK_URL=${N8N_WEBHOOK_URL}
+      - N8N_EDITOR_BASE_URL=${N8N_EDITOR_BASE_URL}
+      - GENERIC_TIMEZONE=${TIMEZONE:-America/Montevideo}
+      - DB_TYPE=postgresdb
+      - DB_POSTGRESDB_HOST=n8n-postgres
+      - DB_POSTGRESDB_PORT=5432
+      - DB_POSTGRESDB_DATABASE=${N8N_DB_NAME}
+      - DB_POSTGRESDB_USER=${N8N_DB_USER}
+      - DB_POSTGRESDB_PASSWORD=${N8N_DB_PASSWORD}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - N8N_PUSH_BACKEND=websocket
+      - N8N_TRUST_PROXY=true
+      - N8N_PROXY_HOPS=1
+    volumes:
+      - /srv/data/n8n:/home/node/.n8n
+      - /srv/data/media:/home/node/.n8n-files/media
+    depends_on:
+      n8n-postgres:
+        condition: service_healthy
+    networks:
+      - n8n_network
+      - services_shared
+
+  n8n-postgres:
+    image: postgres:15-alpine
+    container_name: n8n-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${N8N_DB_NAME}
+      - POSTGRES_USER=${N8N_DB_USER}
+      - POSTGRES_PASSWORD=${N8N_DB_PASSWORD}
+    volumes:
+      - /srv/data/n8n/postgres:/var/lib/postgresql/data
+    networks:
+      - n8n_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${N8N_DB_USER} -d ${N8N_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+networks:
+  n8n_network:
+    driver: bridge
+  services_shared:
+    external: true
+    name: services_shared

@@ -1,0 +1,65 @@
+services:
+  evolution-api:
+    image: atendai/evolution-api:latest
+    container_name: evolution-api
+    restart: unless-stopped
+    ports:
+      - "8088:8080"
+    environment:
+      - SERVER_URL=${EVOLUTION_SERVER_URL}
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://${EVOLUTION_DB_USER}:${EVOLUTION_DB_PASSWORD}@evolution-postgres:5432/${EVOLUTION_DB_NAME}?schema=public
+      - DATABASE_CONNECTION_CLIENT_NAME=evolution_client
+      - CACHE_REDIS_ENABLED=true
+      - CACHE_REDIS_URI=redis://evolution-redis:6379/1
+      - CACHE_REDIS_PREFIX_KEY=evolution
+      - CACHE_REDIS_SAVE_INSTANCES=true
+      - DEL_INSTANCE=false
+      - QRCODE_LIMIT=30
+      - GENERIC_TIMEZONE=${TIMEZONE:-America/Montevideo}
+    volumes:
+      - /srv/data/evolution-api/instances:/evolution/instances
+    depends_on:
+      evolution-postgres:
+        condition: service_healthy
+      evolution-redis:
+        condition: service_started
+    networks:
+      - evolution_internal
+      - services_shared
+
+  evolution-postgres:
+    image: postgres:15-alpine
+    container_name: evolution-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=${EVOLUTION_DB_NAME}
+      - POSTGRES_USER=${EVOLUTION_DB_USER}
+      - POSTGRES_PASSWORD=${EVOLUTION_DB_PASSWORD}
+    volumes:
+      - /srv/data/evolution-api/postgres:/var/lib/postgresql/data
+    networks:
+      - evolution_internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${EVOLUTION_DB_USER} -d ${EVOLUTION_DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  evolution-redis:
+    image: redis:7-alpine
+    container_name: evolution-redis
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - /srv/data/evolution-api/redis:/data
+    networks:
+      - evolution_internal
+
+networks:
+  evolution_internal:
+    driver: bridge
+  services_shared:
+    external: true
+    name: services_shared

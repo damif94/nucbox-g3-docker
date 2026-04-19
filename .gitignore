@@ -2,6 +2,9 @@
 # nucbox-g3-docker: ignore runtime data
 # ------------------------------
 
+# Claude Code local settings
+.claude/settings.local.json
+
 # OS/editor junk
 .DS_Store
 Thumbs.db

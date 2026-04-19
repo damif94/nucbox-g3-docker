@@ -1,0 +1,15 @@
+services:
+  emby:
+    image: linuxserver/emby:latest
+    container_name: emby
+    restart: unless-stopped
+    environment:
+      - PUID=1000
+      - PGID=1000
+      - TZ=America/Montevideo
+    volumes:
+      - /home/damian/docker/emby/config:/config
+      - /home/damian/docker/emby/cache:/cache
+      - /srv/data/media:/media
+    ports:
+      - "8096:8096"
