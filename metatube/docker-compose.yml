@@ -1,0 +1,20 @@
+services:
+  metatube:
+    image: ghcr.io/alexta69/metube:latest
+    container_name: metatube
+    restart: unless-stopped
+    user: "1000:1000"
+    ports:
+      - "8081:8081"
+    environment:
+      - TZ=${TIMEZONE:-America/Montevideo}
+      - AUDIO_DOWNLOAD_DIR=/downloads/audio
+    volumes:
+      - /srv/data/media/metatube:/downloads
+    networks:
+      - services_shared
+
+networks:
+  services_shared:
+    external: true
+    name: services_shared
