@@ -1,6 +1,6 @@
 services:
   evolution-api:
-    image: atendai/evolution-api:latest
+    image: evoapicloud/evolution-api:latest
     container_name: evolution-api
     restart: unless-stopped
     ports:
@@ -17,6 +17,8 @@ services:
       - CACHE_REDIS_SAVE_INSTANCES=true
       - DEL_INSTANCE=false
       - QRCODE_LIMIT=30
+      - CONFIG_SESSION_PHONE_VERSION=${EVOLUTION_PHONE_VERSION:-2.3000.1020885143}
+      - WEB_VERSION=${EVOLUTION_WEB_VERSION:-2.3000.1020885143}
       - GENERIC_TIMEZONE=${TIMEZONE:-America/Montevideo}
     volumes:
       - /srv/data/evolution-api/instances:/evolution/instances
