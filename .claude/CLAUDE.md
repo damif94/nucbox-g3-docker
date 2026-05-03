@@ -47,6 +47,7 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 | watchtower | — | running |
 | n8n | 5678 | running |
 | evolution-api | 8088 | — |
+| metatube | 8081 | — |
 | emby | 8096 | — |
 | tdarr | 8265, 8266 | — |
 | qbittorrent | 8080, 6881 | — |
@@ -54,6 +55,7 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 | radarr | 7878 | — |
 | bazarr | 6767 | — |
 | prowlarr | 9696 | — |
+| cloudflare-ddns | — | — |
 
 ## Environment Variables
 
@@ -74,6 +76,27 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 docker network create services_shared
 docker network create media
 ```
+
+### Docker Daemon (`/etc/docker/daemon.json`)
+
+```json
+{
+  "userland-proxy": false,
+  "no-new-privileges": true,
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "10m",
+    "max-file": "3"
+  }
+}
+```
+
+- `iptables` is **not** disabled — Docker manages its own NAT/masquerade rules so containers can reach the internet.
+- `userland-proxy: false` — uses kernel hairpin NAT instead of a userland proxy process for port forwarding.
+- `no-new-privileges: true` — prevents container processes from gaining new privileges via setuid/setgid.
+- Log rotation is capped at 3 × 10 MB per container.
+
+> After editing `daemon.json`, apply with `sudo systemctl restart docker` then redeploy affected stacks.
 
 ### Firewall (UFW)
 
@@ -106,6 +129,7 @@ Current whitelisted ports:
 | Bazarr | 6767 | TCP |
 | Prowlarr | 9696 | TCP |
 | Evolution API | 8088 | TCP |
+| MeTube | 8081 | TCP |
 
 > When adding a new service, always update this table and run the `ufw allow` command before testing connectivity.
 

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>damianferencz.org</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <style>
+    :root {
+      --bg: #0f172a;
+      --panel: #020617;
+      --text: #e5e7eb;
+      --muted: #94a3b8;
+      --accent: #38bdf8;
+    }
+
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .container {
+      width: 100%;
+      max-width: 700px;
+      padding: 2rem;
+    }
+
+    h1 {
+      margin: 0 0 0.25rem 0;
+      font-size: 2rem;
+    }
+
+    p.subtitle {
+      margin: 0 0 2rem 0;
+      color: var(--muted);
+    }
+
+    .section {
+      background: var(--panel);
+      border-radius: 12px;
+      padding: 1.25rem 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .section h2 {
+      margin: 0 0 1rem 0;
+      font-size: 1.1rem;
+      color: var(--accent);
+    }
+
+    .links {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 0.75rem;
+    }
+
+    a {
+      display: block;
+      padding: 0.75rem 1rem;
+      background: #020617;
+      border-radius: 8px;
+      text-decoration: none;
+      color: var(--text);
+      transition: background 0.15s ease, transform 0.05s ease;
+    }
+
+    a span {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    a:hover {
+      background: #020617;
+      transform: translateY(-1px);
+    }
+
+    footer {
+      margin-top: 2rem;
+      text-align: center;
+      font-size: 0.85rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>damianferencz.org</h1>
+    <p class="subtitle">Self-hosted services</p>
+
+    <div class="section">
+      <h2>🎬 Media Servers</h2>
+      <div class="links">
+        <a href="https://emby.damianferencz.org">Emby<br><span>Media streaming</span></a>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>📥 Automation</h2>
+      <div class="links">
+        <a href="https://radarr.damianferencz.org">Radarr<br><span>Movies</span></a>
+        <a href="https://sonarr.damianferencz.org">Sonarr<br><span>TV Shows</span></a>
+        <a href="https://bazarr.damianferencz.org">Bazarr<br><span>Subtitles</span></a>
+        <a href="https://prowlarr.damianferencz.org">Prowlarr<br><span>Indexers</span></a>
+      </div>
+    </div>
+
+    <div class="section">
+      <h2>🌐 Network & Downloads</h2>
+      <div class="links">
+        <a href="https://qbittorrent.damianferencz.org">qBittorrent<br><span>Torrent client</span></a>
+        <a href="https://portainer.damianferencz.org">Portainer<br><span>Docker management</span></a>
+      </div>
+    </div>
+
+    <footer>
+      Raspberry Pi · Docker · Nginx
+    </footer>
+  </div>
+</body>
+</html>
