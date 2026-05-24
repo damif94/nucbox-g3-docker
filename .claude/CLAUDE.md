@@ -46,6 +46,8 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 | nginx (Proxy Manager) | 80, 81, 443 | running |
 | watchtower | — | running |
 | n8n | 5678 | running |
+| mcp-router | 4781 | running |
+| mcp-server | — (internal) | running |
 | evolution-api | 8088 | — |
 | metatube | 8081 | — |
 | emby | 8096 | — |
@@ -59,7 +61,7 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 
 ## Environment Variables
 
-- `.env` at project root (encrypt with git-crypt once installed)
+- `.env` at project root (gitignored — not committed)
 - `.env.example` provides template — always keep this up to date
 - Services reference variables as `${VAR_NAME}`
 
@@ -68,6 +70,30 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 - Docker networks created manually before first use
 - Nginx Proxy Manager handles SSL/TLS termination
 - Services use isolated Docker networks; only expose ports where needed
+
+### NPM Default Site (Landing Page)
+
+`http://192.168.0.100` (port 80) serves the landing page via NPM's default site config at `/data/nginx/default_host/site.conf`, pointing to `/html/index.html` (mounted from `nginx/html/`). HTML changes are reflected immediately — no restart needed.
+
+> **Caveat:** Saving any setting in the NPM UI triggers a config regeneration that may overwrite `site.conf`. If the landing page stops working, restore it with:
+> ```bash
+> docker cp /tmp/site.conf nginx-proxy-manager:/data/nginx/default_host/site.conf && docker exec nginx-proxy-manager nginx -s reload
+> ```
+> The correct `site.conf` content is:
+> ```nginx
+> server {
+>   listen 80 default;
+>   listen [::]:80 default;
+>   server_name default-host.localhost;
+>   access_log /data/logs/default-host_access.log combined;
+>   error_log /data/logs/default-host_error.log warn;
+>   include conf.d/include/letsencrypt-acme-challenge.conf;
+>   location / {
+>     index index.html;
+>     root /html;
+>   }
+> }
+> ```
 
 ### Shared Networks
 
@@ -130,6 +156,7 @@ Current whitelisted ports:
 | Prowlarr | 9696 | TCP |
 | Evolution API | 8088 | TCP |
 | MeTube | 8081 | TCP |
+| MCP Gateway | 4781 | TCP |
 
 > When adding a new service, always update this table and run the `ufw allow` command before testing connectivity.
 

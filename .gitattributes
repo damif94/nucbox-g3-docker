@@ -1,6 +1,5 @@
 # encrypt env files, prevent any text conversions (CRLF/LF)
 **/.env filter=git-crypt diff=git-crypt -text
-**/.env.* filter=git-crypt diff=git-crypt -text
 
 # (encrypt keys/certs if present)
 **/*.pem filter=git-crypt diff=git-crypt -text
