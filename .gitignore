@@ -67,6 +67,9 @@ tdarr/server/
 **/config/cache/
 **/config/logs/
 
+# MCP credentials (OAuth2 tokens — never commit)
+mcp/credentials/
+
 # ------------------------------
 # Git-crypt
 # (IMPORTANT: do NOT ignore .git-crypt — must be committed)

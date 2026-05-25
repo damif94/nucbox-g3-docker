@@ -21,6 +21,10 @@ services:
       - HOST=0.0.0.0
       - N8N_API_URL=https://n8n.damianferencz.org/api/v1
       - N8N_API_KEY=${N8N_MCP_API_KEY}
+      - GOOGLE_ACCOUNTS=${GOOGLE_ACCOUNTS:-}
+      - GOOGLE_CREDS_DIR=/run/secrets/google
+    volumes:
+      - ./credentials:/run/secrets/google:ro
     networks:
       - services_shared
 
