@@ -58,6 +58,7 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 | bazarr | 6767 | — |
 | prowlarr | 9696 | — |
 | cloudflare-ddns | — | — |
+| postgres (shared) | 5432 | running |
 
 ## Environment Variables
 
@@ -157,6 +158,7 @@ Current whitelisted ports:
 | Evolution API | 8088 | TCP |
 | MeTube | 8081 | TCP |
 | MCP Gateway | 4781 | TCP |
+| PostgreSQL (shared) | 5432 | TCP |
 
 > When adding a new service, always update this table and run the `ufw allow` command before testing connectivity.
 

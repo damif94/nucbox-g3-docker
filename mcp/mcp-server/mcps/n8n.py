@@ -99,6 +99,34 @@ def register(mcp: FastMCP) -> None:
             return r.json()
 
     @mcp.tool()
+    async def update_workflow_from_json(workflow_id: str, workflow_json: str) -> dict:
+        """
+        Update a workflow by passing its full JSON content as a string.
+        Use this when you have a workflow file on disk: read it with the Read tool,
+        then pass the file contents here — no manual reconstruction needed.
+        The workflow_id in the URL takes precedence; id inside the JSON is ignored.
+        """
+        import json as _json
+        _ALLOWED_SETTINGS = {
+            "executionOrder", "saveDataErrorExecution", "saveDataSuccessExecution",
+            "saveManualExecutions", "saveExecutionProgress", "executionTimeout",
+            "timezone", "callerPolicy", "callerIds", "errorWorkflow",
+        }
+        data = _json.loads(workflow_json)
+        body = {
+            "name": data["name"],
+            "nodes": data["nodes"],
+            "connections": data["connections"],
+            "settings": {k: v for k, v in data.get("settings", {}).items() if k in _ALLOWED_SETTINGS},
+            "staticData": data.get("staticData"),
+            "pinData": data.get("pinData", {}),
+        }
+        async with client() as c:
+            r = await c.put(f"/workflows/{workflow_id}", json=body)
+            r.raise_for_status()
+            return r.json()
+
+    @mcp.tool()
     async def activate_workflow(workflow_id: str) -> dict:
         """Activate a workflow so it responds to triggers."""
         async with client() as c:
