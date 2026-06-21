@@ -1,0 +1,24 @@
+services:
+  agents:
+    build:
+      context: ./app
+    image: agents:local
+    container_name: agents
+    restart: unless-stopped
+    user: "1000:1000"
+    environment:
+      - TZ=${TIMEZONE:-America/Montevideo}
+      - PORT=8723
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - AGENTS_API_KEY=${AGENTS_API_KEY:-}
+    volumes:
+      - /srv/data/agents:/data
+    ports:
+      - "8723:8723"
+    networks:
+      - services_shared
+
+networks:
+  services_shared:
+    external: true
+    name: services_shared
