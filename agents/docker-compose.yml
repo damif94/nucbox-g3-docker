@@ -11,8 +11,17 @@ services:
       - PORT=8723
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - AGENTS_API_KEY=${AGENTS_API_KEY:-}
+      - CUSTOMERS_DIR=/config/customers
+      - SKILLS_REGISTRY=/skills/registry.json
+      - MCP_BASE_URL=https://mcp.damianferencz.org
+      - MCP_GATEWAY_TOKEN=${MCP_GATEWAY_TOKEN:-}
+      # Maximus tool pack (read-only MaximUS API wrapper)
+      - MAXIMUS_API_TOKEN=${MAXIMUS_API_TOKEN:-}
+      - MAXIMUS_BASE_URL=${MAXIMUS_BASE_URL:-https://apimax.picodix.com}
     volumes:
       - /srv/data/agents:/data
+      - ./config:/config:ro
+      - ./skills:/skills:ro
     ports:
       - "8723:8723"
     networks:
