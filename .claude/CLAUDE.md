@@ -46,6 +46,15 @@ This file contains project-specific context for Claude Code.
 - Mounts are declared in `emby/docker-compose.yml`. Changing them requires **`docker compose up -d` to recreate** the container — a plain `docker restart` does **not** pick up new volumes.
 - `/media-toshiba` rides on the Toshiba USB drive, so it inherits that drive's mount fragility (see Storage note ¹); if the drive drops and falls through to a stale mount layer, the library errors until a clean remount/reboot.
 
+#### Samba (SMB) share of the Toshiba drive
+
+The `samba` service (`samba/docker-compose.yml`, image `dperson/samba`) exports the whole Toshiba drive root (`/mnt/toshiba`) as a read-write SMB share named **`toshiba`**, so it can be mounted on a desktop and used with native drag-and-drop.
+
+- **Credentials:** `SAMBA_USER` / `SAMBA_PASSWORD` in `.env` (user defaults to `damian`).
+- **Identity mapping:** share runs with `force user = damian` and `force group = 1000`, so files created over SMB land on the host owned `damian:damian` (1000:1000) — consistent with the rest of the box. (dperson's `-u` group field is a **name**, not a gid; passing a gid creates a literal group named after the number and breaks `force group` resolution.)
+- **macOS connect:** Finder → ⌘K → `smb://192.168.0.100` → log in with the SMB user/password → mount share `toshiba`.
+- Ports 139 + 445 (TCP) are open in UFW. Inherits the Toshiba drive's mount fragility (Storage note ¹).
+
 ## Project Structure
 
 Each service has its own directory with a single `docker-compose.yml`.
@@ -72,6 +81,7 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 | prowlarr | 9696 | — |
 | cloudflare-ddns | — | — |
 | postgres (shared) | 5432 | running |
+| samba | 139, 445 | running (SMB share of `/mnt/toshiba`) |
 
 ## Environment Variables
 
@@ -172,6 +182,7 @@ Current whitelisted ports:
 | MeTube | 8081 | TCP |
 | MCP Gateway | 4781 | TCP |
 | PostgreSQL (shared) | 5432 | TCP |
+| Samba (SMB) | 139, 445 | TCP |
 
 > When adding a new service, always update this table and run the `ufw allow` command before testing connectivity.
 

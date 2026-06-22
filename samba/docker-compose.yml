@@ -1,0 +1,24 @@
+services:
+  samba:
+    image: dperson/samba:latest
+    container_name: samba
+    restart: unless-stopped
+    environment:
+      - TZ=America/Montevideo
+    # -u  add user (name;password;uid;gid) — maps to host owner of /mnt/toshiba (1000:1000)
+    # -s  share (name;path;browseable;readonly;guest;users)
+    # -g  extra global smb.conf lines (SMB2+ and macOS/Finder "fruit" extensions)
+    command: >
+      -u "${SAMBA_USER};${SAMBA_PASSWORD};1000;${SAMBA_USER}"
+      -s "toshiba;/share;yes;no;no;${SAMBA_USER}"
+      -g "force user = ${SAMBA_USER}"
+      -g "force group = 1000"
+      -g "server min protocol = SMB2"
+      -g "vfs objects = catia fruit streams_xattr"
+      -g "fruit:metadata = stream"
+      -g "fruit:nfs_aces = no"
+    volumes:
+      - /mnt/toshiba:/share
+    ports:
+      - "139:139"
+      - "445:445"
