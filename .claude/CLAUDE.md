@@ -24,9 +24,6 @@ This file contains project-specific context for Claude Code.
 | `nvme0n1p1` | 100 MB | `/boot/efi` | EFI |
 | `nvme0n1p5` | 280.5 GB | `/` | Root, ~250 GB free |
 | `nvme0n1p2` | 195.3 GB | `/srv/data` | ext4, UUID `b9e73044-62fa-4c6c-80b3-fbc18dd27eb6`, auto-mounted via fstab |
-| `sdb1` (USB)¹ | 1.8 TB | `/mnt/toshiba` | External Toshiba MQ04UBD200 USB HDD (label `TOSHIBA_EXT`), ext4, UUID `811f91b6-7eb0-4eb9-9c80-b6e50e77a5da`. Auto-mounted via fstab with `nofail,x-systemd.device-timeout=10` (won't block boot if unplugged). Owned by `damian:damian`. General storage; ~1.7 TB free. |
-
-> ¹ The USB device letter is **ephemeral** — it has enumerated as both `sda` and `sdb` across reconnects and may change again. Always identify this drive by its UUID (`811f91b6-…`) or label (`TOSHIBA_EXT`), never by `/dev/sdX`. fstab correctly keys off UUID. If the drive ever shows as double-mounted (`findmnt /mnt/toshiba` listing two devices), unmount `/mnt/toshiba` repeatedly until empty, then `mount /mnt/toshiba` to remount cleanly.
 
 ### Data Path Convention
 
@@ -62,7 +59,6 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 | prowlarr | 9696 | — |
 | cloudflare-ddns | — | — |
 | postgres (shared) | 5432 | running |
-| agents | 8723 | running |
 
 ## Environment Variables
 
@@ -163,7 +159,6 @@ Current whitelisted ports:
 | MeTube | 8081 | TCP |
 | MCP Gateway | 4781 | TCP |
 | PostgreSQL (shared) | 5432 | TCP |
-| Agents | 8723 | TCP |
 
 > When adding a new service, always update this table and run the `ufw allow` command before testing connectivity.
 

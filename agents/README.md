@@ -125,27 +125,15 @@ skips it (the request still succeeds).
    MCP_GATEWAY_TOKEN=...      # bare MCP gateway bearer token (matches mcp/nginx.conf)
    ```
 
-3. **Firewall** — allow the port on the host:
-
-   ```bash
-   sudo ufw allow 8723/tcp
-   ```
-
-4. **DNS** — point `agents.damianferencz.org` at the server (handled by
-   `cloudflare-ddns` if it's a subdomain of the managed zone).
-
-5. **Build & start:**
+3. **Build & start:**
 
    ```bash
    cd agents && docker compose --env-file ../.env up -d --build
    docker compose logs -f
    ```
 
-6. **Nginx Proxy Manager** — add a Proxy Host (NPM UI on :81):
-   - Domain: `agents.damianferencz.org`
-   - Scheme: `http`, Forward Host: `192.168.0.100`, Forward Port: `8723`
-   - Websockets: on (if your agent uses them)
-   - SSL tab: request a Let's Encrypt cert, force SSL.
+> Host-level setup — UFW port, DNS, and the Nginx Proxy Manager host — follows
+> the standard homelab conventions documented in the root `CLAUDE.md`.
 
 ## Smoke test
 

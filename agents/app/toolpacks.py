@@ -31,8 +31,8 @@ from __future__ import annotations
 import json
 import logging
 import os
+import typing as t
 from dataclasses import dataclass
-from typing import Callable
 
 import httpx
 
@@ -41,7 +41,7 @@ logger = logging.getLogger("agents.toolpacks")
 # Handler contract: receives the parsed `tool_use.input` dict, returns a string
 # (typically JSON) that becomes the tool_result content. Raise to signal an
 # error — the chat loop converts it into an is_error tool_result.
-Handler = Callable[[dict], str]
+Handler = t.Callable[[dict], str]
 
 
 @dataclass(frozen=True)
