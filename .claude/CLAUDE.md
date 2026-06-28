@@ -24,6 +24,9 @@ This file contains project-specific context for Claude Code.
 | `nvme0n1p1` | 100 MB | `/boot/efi` | EFI |
 | `nvme0n1p5` | 280.5 GB | `/` | Root, ~250 GB free |
 | `nvme0n1p2` | 195.3 GB | `/srv/data` | ext4, UUID `b9e73044-62fa-4c6c-80b3-fbc18dd27eb6`, auto-mounted via fstab |
+| `sdb1` (USB)¹ | 1.8 TB | `/mnt/toshiba` | External Toshiba MQ04UBD200 USB HDD (label `TOSHIBA_EXT`), ext4, UUID `811f91b6-7eb0-4eb9-9c80-b6e50e77a5da`. Auto-mounted via fstab with `nofail,x-systemd.device-timeout=10` (won't block boot if unplugged). Owned by `damian:damian`. General storage; ~1.7 TB free. |
+
+> ¹ The USB device letter is **ephemeral** — it has enumerated as both `sda` and `sdb` across reconnects and may change again. Always identify this drive by its UUID (`811f91b6-…`) or label (`TOSHIBA_EXT`), never by `/dev/sdX`. fstab correctly keys off UUID. If the drive ever shows as double-mounted (`findmnt /mnt/toshiba` listing two devices), unmount `/mnt/toshiba` repeatedly until empty, then `mount /mnt/toshiba` to remount cleanly.
 
 ### Data Path Convention
 
@@ -32,6 +35,16 @@ This file contains project-specific context for Claude Code.
   - Mirrors the Pi's path convention for easy rsync during migration
 - **Service data** (media, databases, heavy I/O): `/srv/data/<service-name>`
   - Permissions: `sudo mkdir -p /srv/data/<service> && sudo chown -R 1000:1000 /srv/data/<service>`
+
+#### Emby media mounts
+
+| Host path | Container path | Mode | Notes |
+|-----------|----------------|------|-------|
+| `/srv/data/media` | `/media` | rw | Primary library on NVMe (`movies`, `tv`, `metatube`) |
+| `/mnt/toshiba` | `/media-toshiba` | **ro** | Whole Toshiba drive root, read-only. Add libraries via subpaths, e.g. `/media-toshiba/backup/Fotos Grecia`. |
+
+- Mounts are declared in `emby/docker-compose.yml`. Changing them requires **`docker compose up -d` to recreate** the container — a plain `docker restart` does **not** pick up new volumes.
+- `/media-toshiba` rides on the Toshiba USB drive, so it inherits that drive's mount fragility (see Storage note ¹); if the drive drops and falls through to a stale mount layer, the library errors until a clean remount/reboot.
 
 ## Project Structure
 

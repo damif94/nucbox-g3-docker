@@ -11,6 +11,6 @@ services:
       - /home/damian/docker/emby/config:/config
       - /home/damian/docker/emby/cache:/cache
       - /srv/data/media:/media
-      - /mnt/toshiba/data/media:/media-toshiba:ro
+      - /mnt/toshiba:/media-toshiba:ro
     ports:
       - "8096:8096"
