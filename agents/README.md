@@ -39,7 +39,7 @@ tools:                                    # explicit Anthropic tool TYPES (you p
   - web_fetch_20250910
   - code_execution_20250825
 mcp: [wikipedia, n8n]                     # MCP gateway integrations (via the connector)
-toolpacks: [maximus]                      # hand-written client-side tool packs (app/toolpacks.py)
+toolpacks: [maximus]                      # hand-written client-side tool packs (app/toolpacks/)
 skills:
   - { type: anthropic, id: pdf }          # prebuilt Anthropic skill
   - { type: custom, name: foo }           # custom skill, resolved via skills/registry.json
@@ -49,7 +49,7 @@ skills:
   and any required beta header from the type, and passes it through verbatim. You
   choose compatible variants in the YAML (see the caveat below).
 - **Server tools, MCP, and skills run on Anthropic's side.** **Tool packs run
-  here:** each pack in `app/toolpacks.py` bundles hand-written tool definitions
+  here:** each pack module in `app/toolpacks/` bundles hand-written tool definitions
   with Python handlers; when a customer lists a pack in `toolpacks:`, `/chat`
   runs a client-side tool loop that executes those handlers and feeds results
   back. MCP uses the connector pointing at `https://mcp.damianferencz.org/<integration>`,

@@ -107,7 +107,7 @@ class CustomerConfig(BaseModel):
     tools: list[str] = Field(default_factory=list)
     mcp: list[str] = Field(default_factory=list)
     skills: list[SkillRef] = Field(default_factory=list)
-    # Hand-written client-side tool packs (see app/toolpacks.py), e.g. ["maximus"].
+    # Hand-written client-side tool packs (see app/toolpacks/), e.g. ["maximus"].
     toolpacks: list[str] = Field(default_factory=list)
 
 
@@ -179,7 +179,7 @@ def _build_request_kwargs(cfg: CustomerConfig) -> tuple[dict, list[str], dict[st
     `code_execution_20250825`) — the caller chooses compatible variants in YAML;
     we pass them through and only derive the canonical name and any beta headers.
 
-    `cfg.toolpacks` names hand-written client-side packs (see app/toolpacks.py);
+    `cfg.toolpacks` names hand-written client-side packs (see app/toolpacks/);
     their tool *definitions* are added to `tools` and their handlers returned so
     the chat loop can execute the resulting `tool_use` calls here.
     """
