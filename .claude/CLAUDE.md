@@ -82,6 +82,7 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 | cloudflare-ddns | — | — |
 | postgres (shared) | 5432 | running |
 | samba | 139, 445 | running (SMB share of `/mnt/toshiba`) |
+| agents | 8723 | running (multi-customer) |
 
 ## Environment Variables
 
@@ -183,6 +184,7 @@ Current whitelisted ports:
 | MCP Gateway | 4781 | TCP |
 | PostgreSQL (shared) | 5432 | TCP |
 | Samba (SMB) | 139, 445 | TCP |
+| Agents | 8723 | TCP |
 
 > When adding a new service, always update this table and run the `ufw allow` command before testing connectivity.
 
