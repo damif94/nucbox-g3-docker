@@ -9,6 +9,7 @@ services:
     environment:
       - TZ=${TIMEZONE:-America/Montevideo}
       - AUDIO_DOWNLOAD_DIR=/downloads/audio
+      - DELETE_FILE_ON_TRASHCAN=true
     volumes:
       - /srv/data/media/metatube:/downloads
     networks:
