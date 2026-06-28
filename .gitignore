@@ -76,3 +76,8 @@ mcp/credentials/
 # (IMPORTANT: do NOT ignore .git-crypt — must be committed)
 # ------------------------------
 # .git-crypt/
+
+# ------------------------------
+# Local debug tooling (net-probe connectivity monitor — local-only, not committed)
+# ------------------------------
+scripts/
