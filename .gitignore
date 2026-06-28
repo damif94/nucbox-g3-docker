@@ -22,7 +22,8 @@ __pycache__/
 # ------------------------------
 # Secrets / env files
 # ------------------------------
-.env
+# NOTE: .env is intentionally NOT ignored — it is committed ENCRYPTED via
+# git-crypt (see .gitattributes). Plaintext backups (.env.bak.*) stay ignored.
 .env.*
 !.env.example
 !.env.sample

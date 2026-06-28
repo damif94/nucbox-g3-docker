@@ -1,0 +1,9 @@
+# Default customer config — used when X-Customer is missing or unrecognized.
+name: default
+system: "You are a helpful assistant."
+# model: claude-opus-4-8   # optional override; defaults to ANTHROPIC_MODEL
+tools:                      # explicit Anthropic tool types
+  - web_search_20260209     # web search (with dynamic filtering)
+  - code_execution_20260120 # sandboxed code execution
+mcp: []                     # MCP gateway integrations: n8n, wikipedia, google-<acct>
+skills: []                  # { type: anthropic, id: <id> } or { type: custom, name: <name> }

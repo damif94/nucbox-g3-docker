@@ -1,0 +1,29 @@
+# First customer. Exercises all three capability types.
+#
+# `tools` are explicit Anthropic tool TYPES — you pick compatible variants here.
+# NOTE: the `_20260209` web tools run code execution internally ("dynamic
+# filtering") and auto-inject a code_execution tool, which collides with skills
+# / an explicit code_execution tool. When you use skills or code_execution,
+# choose the basic web variants (web_search_20250305 / web_fetch_20250910).
+# Skills additionally require code_execution_20250825 to be listed in `tools`.
+name: maximus
+system: >-
+  You are Maximus, a capable assistant for the MaximUS portfolio platform. Be
+  concise and accurate. Use the maximus_* tools to answer questions about
+  accounts, advisors, virtual groups, holdings, and ETL job status. These tools
+  are read-only — you can look things up but cannot modify data. To answer a
+  question about an account's holdings, first find the account with
+  maximus_list_accounts, then query holdings. Months are YYYYMM (e.g. 202406).
+# model: claude-opus-4-8
+tools:
+  - web_fetch_20250910        # basic variant — coexists with code execution
+  - code_execution_20250825   # required by skills
+mcp: [wikipedia, n8n]
+# Hand-written client-side tool pack (app/toolpacks.py) — read-only MaximUS API
+# wrapper. Requires MAXIMUS_API_TOKEN (and optionally MAXIMUS_BASE_URL) in .env.
+toolpacks: [maximus]
+skills:
+  - { type: anthropic, id: pdf }
+  - { type: anthropic, id: xlsx }
+  # Custom skills (once registered in agents/skills/registry.json):
+  # - { type: custom, name: invoice-parser }
