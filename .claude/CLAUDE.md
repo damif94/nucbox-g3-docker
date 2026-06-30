@@ -15,7 +15,7 @@ This file contains project-specific context for Claude Code.
 - **Primary Access**: SSH (local network)
 - **SSH User**: damian
 - **Project Path**: `/home/damian/nucbox-g3-docker`
-- **LAN IP**: `192.168.0.100`
+- **LAN IP**: `192.168.0.100` — **static**, on **wired ethernet** (`enp3s0`, gigabit)
 
 ## Storage
 
