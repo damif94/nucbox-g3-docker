@@ -60,4 +60,4 @@ def setup_logging(*, debug: bool = False):
 
 
 def get_logger(name: str) -> structlog.stdlib.BoundLogger:
-    return structlog.get_logger(service="agents", logger=name)
+    return structlog.get_logger(service="agents", module=name)
