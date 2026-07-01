@@ -172,7 +172,24 @@ def _resolve_skills(cfg: CustomerConfig) -> list[dict]:
     return entries
 
 
-def _build_request_kwargs(cfg: CustomerConfig) -> tuple[dict, list[str], dict[str, Handler]]:
+def _compose_system(base: str, rules: list[str]) -> str:
+    """Append per-request custom rules to the customer's base system prompt.
+
+    Rules come from the request body (`ChatRequest.rules`) and are layered on top
+    of the customer's static `system` prompt so callers can steer a single turn
+    without editing customer config. Blank rules are dropped; no rules -> base
+    prompt unchanged.
+    """
+    clean = [r.strip() for r in rules if r and r.strip()]
+    if not clean:
+        return base
+    bullets = "\n".join(f"- {r}" for r in clean)
+    return f"{base}\n\n<additional_rules>\n{bullets}\n</additional_rules>"
+
+
+def _build_request_kwargs(
+    cfg: CustomerConfig, rules: list[str] | None = None
+) -> tuple[dict, list[str], dict[str, Handler]]:
     """Assemble tools/mcp_servers/container + beta headers from customer config.
 
     `cfg.tools` holds explicit Anthropic tool *types* (e.g. `web_fetch_20250910`,
@@ -182,10 +199,12 @@ def _build_request_kwargs(cfg: CustomerConfig) -> tuple[dict, list[str], dict[st
     `cfg.toolpacks` names hand-written client-side packs (see app/toolpacks/);
     their tool *definitions* are added to `tools` and their handlers returned so
     the chat loop can execute the resulting `tool_use` calls here.
+
+    `rules` are optional per-request instructions appended to the system prompt.
     """
     tools: list[dict] = [{"type": t, "name": _tool_name(t)} for t in cfg.tools]
     betas: set[str] = {TOOL_BETAS[t] for t in cfg.tools if t in TOOL_BETAS}
-    extra: dict = {"system": cfg.system}
+    extra: dict = {"system": _compose_system(cfg.system, rules or [])}
 
     pack_defs, handlers = load_toolpacks(cfg.toolpacks)
     tools += pack_defs
@@ -364,11 +383,23 @@ class ChatRequest(BaseModel):
         default_factory=list,
         description="Optional images and documents to send with the message.",
     )
+    rules: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Optional per-request instructions appended to the customer's system "
+            "prompt for this turn only. Each string becomes a bullet under an "
+            "`<additional_rules>` section; blank entries are ignored."
+        ),
+    )
 
     model_config = {
         "json_schema_extra": {
             "examples": [
-                {"message": "Explain quantum computing in two sentences.", "chatId": "demo-1"}
+                {
+                    "message": "Explain quantum computing in two sentences.",
+                    "chatId": "demo-1",
+                    "rules": ["Answer in Spanish.", "Avoid jargon."],
+                }
             ]
         }
     }
@@ -437,7 +468,7 @@ def chat(
         return ChatResponse(error="ANTHROPIC_API_KEY is not set; configure it in .env")
 
     cfg = _resolve_customer(x_customer)
-    extra, betas, handlers = _build_request_kwargs(cfg)
+    extra, betas, handlers = _build_request_kwargs(cfg, req.rules)
     model = req.model or cfg.model or DEFAULT_MODEL
 
     mem_key = f"{cfg.name}:{req.chatId}" if req.chatId else None
