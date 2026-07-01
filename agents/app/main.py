@@ -18,21 +18,24 @@ Interactive API docs (Swagger UI) at /docs; ReDoc at /redoc; OpenAPI at
 """
 
 import json
-import logging
 import os
 import secrets
+import time
+import uuid
 from pathlib import Path
 from typing import Literal
 
 import yaml
-from fastapi import Depends, FastAPI, Header, HTTPException, Security
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Security
 from fastapi.security import APIKeyHeader
 from pydantic import BaseModel, Field
+from starlette.middleware.base import BaseHTTPMiddleware
 
+from logging_config import customer_var, get_logger, request_id_var, setup_logging
 from toolpacks import Handler, load_toolpacks
 
-logger = logging.getLogger("agents")
-logging.basicConfig(level=logging.INFO)
+setup_logging(debug=os.environ.get("LOG_LEVEL", "").lower() == "debug")
+logger = get_logger("agents.main")
 
 app = FastAPI(
     title="agents",
@@ -51,6 +54,32 @@ app = FastAPI(
         {"name": "chat", "description": "Talk to the agent."},
     ],
 )
+
+mw_logger = get_logger("agents.middleware")
+
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        rid = uuid.uuid4().hex[:12]
+        request_id_var.set(rid)
+        customer_var.set(None)
+        mw_logger.info(
+            "request_started",
+            method=request.method,
+            path=request.url.path,
+            client_ip=request.client.host if request.client else None,
+        )
+        t0 = time.monotonic()
+        response = await call_next(request)
+        mw_logger.info(
+            "request_complete",
+            status=response.status_code,
+            latency_ms=round((time.monotonic() - t0) * 1000),
+        )
+        return response
+
+
+app.add_middleware(RequestLoggingMiddleware)
 
 # Opus 4.8 is the current most-capable model; override per request/customer.
 DEFAULT_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-opus-4-8")
@@ -120,9 +149,9 @@ def _load_customers() -> dict[str, CustomerConfig]:
                 cfg = CustomerConfig(**data)
                 out[cfg.name] = cfg
             except Exception as exc:  # malformed config shouldn't take down the service
-                logger.warning("Skipping bad customer config %s: %s", path, exc)
+                logger.warning("customer_config_invalid", path=str(path), error=str(exc))
     if "default" not in out:
-        logger.warning("No 'default' customer config found; using a built-in default.")
+        logger.warning("customer_config_default_missing")
         out["default"] = CustomerConfig(name="default")
     return out
 
@@ -136,11 +165,16 @@ def _load_registry() -> dict[str, dict]:
 
 CUSTOMERS = _load_customers()
 SKILL_REGISTRY = _load_registry()
-logger.info("Loaded customers: %s", ", ".join(sorted(CUSTOMERS)))
+logger.info("customers_loaded", customers=sorted(list(CUSTOMERS.keys())))
 
 
 def _resolve_customer(name: str | None) -> CustomerConfig:
-    return CUSTOMERS.get(name or "default") or CUSTOMERS["default"]
+    requested = name or "default"
+    cfg = CUSTOMERS.get(requested) or CUSTOMERS["default"]
+    fallback = cfg.name != requested
+    customer_var.set(cfg.name)
+    logger.info("customer_resolved", requested=requested, fallback=fallback)
+    return cfg
 
 
 def _resolve_skills(cfg: CustomerConfig) -> list[dict]:
@@ -149,7 +183,7 @@ def _resolve_skills(cfg: CustomerConfig) -> list[dict]:
     for s in cfg.skills:
         if s.type == "anthropic":
             if not s.id:
-                logger.warning("[%s] anthropic skill missing 'id'; skipping", cfg.name)
+                logger.warning("skill_skipped", reason="missing id", skill_type="anthropic")
                 continue
             entry = {"type": "anthropic", "skill_id": s.id}
             if s.version:
@@ -158,9 +192,7 @@ def _resolve_skills(cfg: CustomerConfig) -> list[dict]:
         else:  # custom
             reg = SKILL_REGISTRY.get(s.name or "")
             if not reg:
-                logger.warning(
-                    "[%s] custom skill '%s' not in registry; skipping", cfg.name, s.name
-                )
+                logger.warning("skill_skipped", reason="not in registry", skill_name=s.name)
                 continue
             entries.append(
                 {
@@ -183,6 +215,7 @@ def _compose_system(base: str, rules: list[str]) -> str:
     clean = [r.strip() for r in rules if r and r.strip()]
     if not clean:
         return base
+    logger.info("rules_applied", rules_count=len(clean))
     bullets = "\n".join(f"- {r}" for r in clean)
     return f"{base}\n\n<additional_rules>\n{bullets}\n</additional_rules>"
 
@@ -272,19 +305,40 @@ def _run(
     common = dict(model=model, max_tokens=16000, thinking={"type": "adaptive"}, **extra)
     msgs = list(messages)
     resp = None
-    for _ in range(MAX_AGENT_STEPS):
-        if betas:
-            resp = client.beta.messages.create(messages=msgs, betas=betas, **common)
-        else:
-            resp = client.messages.create(messages=msgs, **common)
+    for step in range(1, MAX_AGENT_STEPS + 1):
+        logger.info("llm_call_started", model=model, step=step)
+        t0 = time.monotonic()
+        try:
+            if betas:
+                resp = client.beta.messages.create(messages=msgs, betas=betas, **common)
+            else:
+                resp = client.messages.create(messages=msgs, **common)
+        except Exception:
+            logger.error(
+                "llm_call_failed",
+                model=model,
+                step=step,
+                latency_ms=round((time.monotonic() - t0) * 1000),
+                exc_info=True,
+            )
+            raise
+        usage = resp.usage
+        logger.info(
+            "llm_call_complete",
+            model=model,
+            step=step,
+            stop_reason=resp.stop_reason,
+            tokens_in=usage.input_tokens,
+            tokens_out=usage.output_tokens,
+            latency_ms=round((time.monotonic() - t0) * 1000),
+        )
 
         if resp.stop_reason == "pause_turn":
-            # Server tool hit its iteration limit — append and re-send to continue.
             msgs = msgs + [{"role": "assistant", "content": resp.content}]
             continue
 
         if resp.stop_reason == "tool_use" and handlers:
-            results = _run_client_tools(resp, handlers)
+            results = _run_client_tools(resp, handlers, step)
             msgs = msgs + [
                 {"role": "assistant", "content": resp.content},
                 {"role": "user", "content": results},
@@ -295,7 +349,10 @@ def _run(
     return resp
 
 
-def _run_client_tools(resp, handlers: dict[str, Handler]) -> list[dict]:
+tool_logger = get_logger("agents.toolpacks")
+
+
+def _run_client_tools(resp, handlers: dict[str, Handler], step: int) -> list[dict]:
     """Execute every `tool_use` block in a response, returning tool_result blocks.
 
     Each `tool_use` id must get exactly one result or the next request 400s, so
@@ -307,6 +364,7 @@ def _run_client_tools(resp, handlers: dict[str, Handler]) -> list[dict]:
             continue
         handler = handlers.get(block.name)
         if handler is None:
+            tool_logger.warning("tool_call_unknown", tool=block.name, step=step)
             results.append(
                 {
                     "type": "tool_result",
@@ -316,13 +374,28 @@ def _run_client_tools(resp, handlers: dict[str, Handler]) -> list[dict]:
                 }
             )
             continue
+        tool_logger.info("tool_call_started", tool=block.name, step=step)
+        t0 = time.monotonic()
         try:
             content = handler(block.input)
+            tool_logger.info(
+                "tool_call_complete",
+                tool=block.name,
+                step=step,
+                success=True,
+                latency_ms=round((time.monotonic() - t0) * 1000),
+            )
             results.append(
                 {"type": "tool_result", "tool_use_id": block.id, "content": content}
             )
-        except Exception as exc:  # tool failures shouldn't crash the chat
-            logger.warning("Tool '%s' failed: %s", block.name, exc)
+        except Exception as exc:
+            tool_logger.warning(
+                "tool_call_failed",
+                tool=block.name,
+                step=step,
+                error=str(exc),
+                latency_ms=round((time.monotonic() - t0) * 1000),
+            )
             results.append(
                 {
                     "type": "tool_result",
@@ -473,12 +546,14 @@ def chat(
 
     mem_key = f"{cfg.name}:{req.chatId}" if req.chatId else None
     history = CONVERSATIONS.get(mem_key, []) if mem_key else []
+    if mem_key:
+        logger.info("history_loaded", chat_id=req.chatId, turns=len(history) // 2)
     messages = history + [{"role": "user", "content": _build_content(req)}]
 
     try:
         resp = _run(model, messages, extra, betas, handlers)
     except Exception as exc:
-        logger.exception("[%s] chat failed", cfg.name)
+        logger.error("chat_failed", error=str(exc), exc_info=True)
         return ChatResponse(customer=cfg.name, error=str(exc))
 
     reply = "".join(block.text for block in resp.content if block.type == "text")
@@ -489,5 +564,6 @@ def chat(
             {"role": "assistant", "content": reply},
         ]
         CONVERSATIONS[mem_key] = updated[-(MAX_TURNS * 2):]
+        logger.info("history_saved", chat_id=req.chatId, turns=len(CONVERSATIONS[mem_key]) // 2)
 
     return ChatResponse(reply=reply, customer=cfg.name)
