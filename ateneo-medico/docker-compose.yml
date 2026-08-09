@@ -1,0 +1,46 @@
+services:
+  app:
+    build: /home/damian/ateneo-medico
+    container_name: ateneo-medico
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://ateneo:${ATENEO_DB_PASSWORD}@ateneo-medico-db:5432/ateneo_medico
+      N8N_BASE_URL: https://${N8N_HOST}
+      N8N_API_KEY: ${N8N_MCP_API_KEY}
+      N8N_MENSAJES_TABLE_ID: ${ATENEO_MENSAJES_TABLE_ID:-YzVnRoMfnxuehsWP}
+      SECRET_KEY: ${ATENEO_SECRET_KEY}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ATENEO_TOKEN_EXPIRE:-60}
+      ROOT_PATH: /ateneo-medico
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - ateneo
+      - npm_network
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: ateneo-medico-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ateneo_medico
+      POSTGRES_USER: ateneo
+      POSTGRES_PASSWORD: ${ATENEO_DB_PASSWORD}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ateneo -d ateneo_medico"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - ateneo
+
+volumes:
+  pgdata:
+
+networks:
+  ateneo:
+  npm_network:
+    external: true
+    name: nginx_npm_network

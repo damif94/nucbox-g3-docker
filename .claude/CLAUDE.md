@@ -83,6 +83,7 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 | postgres (shared) | 5432 | running |
 | samba | 139, 445 | running (SMB share of `/mnt/toshiba`) |
 | agents | 8723 | running (multi-customer) |
+| ateneo-medico | — (via NPM) | running (subpath on `damianferencz.org/ateneo-medico`) |
 
 ## Environment Variables
 
@@ -119,6 +120,16 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 >   }
 > }
 > ```
+
+### Subpath Routing (NPM `advanced_config`)
+
+Some services are routed as subpaths on `damianferencz.org` rather than their own subdomain. These are configured via the `advanced_config` block on the NPM proxy host for `damianferencz.org` (host ID 2), which adds `location` directives that strip the prefix before proxying.
+
+| Subpath | Container upstream | Notes |
+|---|---|---|
+| `/ateneo-medico/` | `ateneo-medico:8000` | FastAPI app; `ROOT_PATH=/ateneo-medico` for URL generation. Joins `nginx_npm_network`. |
+
+> The trailing slash on `proxy_pass` is critical — it strips the `/ateneo-medico/` prefix so the backend receives clean paths (e.g. `/login`, `/messages`).
 
 ### Shared Networks
 
