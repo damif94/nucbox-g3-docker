@@ -4,6 +4,15 @@ services:
     container_name: n8n
     restart: unless-stopped
     user: "1000:1000"
+    # Use reliable public resolvers instead of the router (192.168.0.1) for
+    # outbound lookups. The router's DNS forwarder over WiFi was jittering
+    # (7ms -> 150-478ms) and timing out (EAI_AGAIN), breaking the Google
+    # Sheets Trigger nodes. On this user-defined network the container still
+    # resolves sibling containers (e.g. n8n-postgres) via Docker's embedded
+    # DNS (127.0.0.11); this only changes the upstream it forwards to.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
     ports:
       - "5678:5678"
     environment:
