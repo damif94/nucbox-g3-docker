@@ -42,6 +42,20 @@ services:
       timeout: 5s
       retries: 5
 
+  certbot-renew:
+    image: certbot/certbot:latest
+    container_name: certbot-renew
+    entrypoint: /bin/sh
+    command: -c 'trap exit TERM; while true; do certbot renew --non-interactive --deploy-hook /deploy-hook.py 2>&1; sleep 12h & wait $$!; done'
+    volumes:
+      - ./letsencrypt:/etc/letsencrypt
+      - ./data:/data
+      - ./deploy-hook.py:/deploy-hook.py:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    restart: unless-stopped
+    depends_on:
+      - proxy
+
   landing:
     image: nginx:alpine
     container_name: landing
