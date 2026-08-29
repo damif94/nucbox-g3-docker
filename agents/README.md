@@ -149,6 +149,21 @@ curl -X POST http://192.168.0.100:8723/chat \
   -d '{"message":"hi","chatId":"demo-1"}'
 ```
 
+### Per-request rules
+
+`/chat` accepts an optional `rules` array — free-form instructions layered on top
+of the customer's static `system` prompt for that turn only (no config edit
+needed). Each string becomes a bullet under an `<additional_rules>` section of the
+system prompt; blank entries are dropped.
+
+```bash
+curl -X POST http://192.168.0.100:8723/chat \
+  -H "X-API-Key: $AGENTS_API_KEY" \
+  -H "X-Customer: maximus" \
+  -H "Content-Type: application/json" \
+  -d '{"message":"summarize this account","rules":["Answer in Spanish.","Be concise."]}'
+```
+
 ## Rebuilding / reloading
 
 ```bash
@@ -158,3 +173,45 @@ cd agents && docker compose --env-file ../.env up -d --build
 # customer config / skills registry change → restart (mounted read-only, no rebuild):
 cd agents && docker compose --env-file ../.env restart
 ```
+
+> **Editing a file** under `config/` or `skills/` is picked up by `restart` (the
+> bind mount shows live file changes). **Recreating the directory itself is not**
+> — see the stale-bind-mount gotcha below.
+
+## Troubleshooting
+
+### Every customer falls back to `default` (tools/system prompt missing) — stale bind mount
+
+**Symptom:** `/chat` answers as the bare built-in assistant for every request —
+no customer system prompt, no `toolpacks`, no MCP. A customer that worked before
+(e.g. `maximus`) now replies generically ("I'm an AI, I have no access to…").
+
+**Diagnose:**
+
+```bash
+docker exec agents ls /config/customers/          # empty or "No such file"? -> mount is stale
+docker exec agents python3 -c "import urllib.request;print(urllib.request.urlopen('http://localhost:8723/customers').read().decode())"
+docker logs agents 2>&1 | grep -i "Loaded customers"   # shows only "default"
+ls -la config/customers/                          # host: files ARE present
+```
+
+If the host has the files but the container's `/config` is empty, the bind mount
+is stale.
+
+**Cause:** `config/` and `skills/` are bind-mounted from the repo. A bind mount
+pins to the directory's **inode at container-create time**. If the `agents/` tree
+is later *recreated* — `git checkout`/`restore`/`stash` that replaces the dir, a
+re-clone, an `rsync --delete`, etc. — the host path gets a **new inode** while the
+running container stays bound to the old, now-orphaned one. The container then
+sees an empty `/config`, loads zero customer YAMLs, and falls back to the built-in
+`default` (see `main.py` `_load_customers`). Editing files in place is fine — only
+replacing the *directory* triggers this.
+
+**Fix — recreate the container so the mount re-resolves to the current inode:**
+
+```bash
+cd agents && docker compose --env-file ../.env up -d --force-recreate
+```
+
+`docker restart` may **not** be enough — use `--force-recreate`. Verify with the
+diagnose commands above: `/customers` should list every customer again.
