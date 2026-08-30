@@ -46,6 +46,32 @@ This file contains project-specific context for Claude Code.
 - Mounts are declared in `emby/docker-compose.yml`. Changing them requires **`docker compose up -d` to recreate** the container — a plain `docker restart` does **not** pick up new volumes.
 - `/media-toshiba` rides on the Toshiba USB drive, so it inherits that drive's mount fragility (see Storage note ¹); if the drive drops and falls through to a stale mount layer, the library errors until a clean remount/reboot.
 
+#### paywall-pdf (Bypass Paywalls → PDF over Telegram)
+
+Send a link to the Telegram bot and get the article back as a clean PDF — the
+workaround for mobile Chrome not supporting extensions. Runs one headless
+Chromium with the *Bypass Paywalls Clean* extension loaded (`paywall-pdf/`, see
+its README for the engine details).
+
+| Host path | Container path | Notes |
+|---|---|---|
+| `/srv/data/paywall-pdf/extension` | `/data/extension` | Unpacked BPC, auto-refreshed weekly and via `/update` in chat |
+| `/srv/data/paywall-pdf/profile` | `/data/profile` | Chrome profile — keeps extension state and any site logins |
+| `/srv/data/paywall-pdf/debug` | `/data/debug` | CLI renders, swept after 7 days |
+
+- **No host port and no UFW rule**: the bot reaches Telegram by *outbound* long
+  polling, so nothing new is exposed on the LAN. This is the pattern to prefer
+  for any future bot on this box.
+- Locally built image (`paywall-pdf:local`), so it carries
+  `com.centurylinklabs.watchtower.enable=false` — watchtower has nothing to pull.
+- Chromium needs `shm_size: 1gb`; the 64 MB default `/dev/shm` crashes it.
+- The Chrome profile keeps a `SingletonLock` naming the container hostname, which
+  changes on every recreate. The service deletes those locks at startup —
+  without that, any `docker compose up` recreate crash-loops the container.
+- Bot token: `PAYWALL_BOT_TOKEN` in `.env`, falling back to the shared
+  `TELEGRAM_BOT_TOKEN` (watchtower's bot). Sharing is safe — watchtower only
+  sends, so it never competes for `getUpdates`.
+
 #### Samba (SMB) share of the Toshiba drive
 
 The `samba` service (`samba/docker-compose.yml`, image `dperson/samba`) exports the whole Toshiba drive root (`/mnt/toshiba`) as a read-write SMB share named **`toshiba`**, so it can be mounted on a desktop and used with native drag-and-drop.
@@ -84,6 +110,7 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 | samba | 139, 445 | running (SMB share of `/mnt/toshiba`) |
 | agents | 8723 | running (multi-customer) |
 | ateneo-medico | — (via NPM) | running (subpath on `damianferencz.org/ateneo-medico`) |
+| paywall-pdf | — (outbound only) | running (Telegram bot: link → article PDF) |
 
 ## Environment Variables
 
@@ -198,6 +225,9 @@ Current whitelisted ports:
 | Agents | 8723 | TCP |
 
 > When adding a new service, always update this table and run the `ufw allow` command before testing connectivity.
+
+> `paywall-pdf` deliberately appears nowhere in this table: it only makes
+> outbound connections (Telegram long polling), so it needs no port and no rule.
 
 ## Deployment Workflow
 
