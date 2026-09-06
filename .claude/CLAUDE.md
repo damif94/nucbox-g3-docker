@@ -44,7 +44,7 @@ This file contains project-specific context for Claude Code.
 | `/mnt/toshiba` | `/media-toshiba` | **ro** | Whole Toshiba drive root, read-only. Add libraries via subpaths, e.g. `/media-toshiba/backup/Fotos Grecia`. |
 
 - Mounts are declared in `emby/docker-compose.yml`. Changing them requires **`docker compose up -d` to recreate** the container — a plain `docker restart` does **not** pick up new volumes.
-- `/media-toshiba` rides on the Toshiba USB drive, so it inherits that drive's mount fragility (see Storage note ¹); if the drive drops and falls through to a stale mount layer, the library errors until a clean remount/reboot.
+- `/media-toshiba` rides on the Toshiba USB drive, so it inherits that drive's mount fragility (see Storage note ¹). The mount is declared in long form with `propagation: rslave` (the host mount is `shared`) so the container **follows** host remounts: unplugging and remounting the drive no longer leaves Emby holding a stale, empty mount layer that errors until a reboot. Keep the long-form `type: bind` block — the short `/mnt/toshiba:/media-toshiba:ro` string cannot express propagation.
 
 #### paywall-pdf (Bypass Paywalls → EPUB over Telegram)
 
