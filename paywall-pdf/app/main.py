@@ -1,4 +1,4 @@
-"""Telegram bot: send a link, get the article back as a PDF.
+"""Telegram bot: send a link, get the article back as an EPUB.
 
 Runs one long-lived headless Chromium with the Bypass Paywalls Clean extension
 loaded, and serves one render at a time (this box has 4 cores).
@@ -28,11 +28,12 @@ URL_RE = re.compile(r"https?://[^\s<>\"')]+", re.I)
 TRACKING = re.compile(r"^(utm_|fbclid|gclid|mc_[ce]id|igshid|ref_?src|__twitter)", re.I)
 
 HELP = (
-    "<b>Bypass Paywalls → PDF</b>\n\n"
-    "Mandame un link y te devuelvo el artículo en PDF, listo para leer.\n\n"
+    "<b>Bypass Paywalls → EPUB</b>\n\n"
+    "Mandame un link y te devuelvo el artículo en EPUB, listo para leer.\n\n"
     "<b>Comandos</b>\n"
-    "• <code>&lt;link&gt;</code> — PDF limpio, modo lectura\n"
-    "• <code>/raw &lt;link&gt;</code> — la página tal cual se ve\n"
+    "• <code>&lt;link&gt;</code> — EPUB limpio, modo lectura\n"
+    "• <code>/pdf &lt;link&gt;</code> — lo mismo, pero en PDF\n"
+    "• <code>/raw &lt;link&gt;</code> — la página tal cual se ve (PDF)\n"
     "• <code>/status</code> — estado del servicio\n"
     "• <code>/update</code> — actualizar la extensión\n\n"
     "Podés mandar varios links en un mismo mensaje."
@@ -78,12 +79,13 @@ class Bot:
             finally:
                 self.queue.task_done()
 
-    async def process(self, chat_id: int, url: str, raw: bool, reply_to: int, status_id: int) -> None:
+    async def process(self, chat_id: int, url: str, raw: bool, fmt: str,
+                      reply_to: int, status_id: int) -> None:
         host = (urlparse(url).hostname or url).removeprefix("www.")
         await self.tg.edit(chat_id, status_id, f"⏳ Abriendo <b>{html.escape(host)}</b>…")
         await self.tg.action(chat_id)
         try:
-            res = await self.renderer.render(url, raw=raw)
+            res = await self.renderer.render(url, raw=raw, fmt=fmt)
         except RenderError as exc:
             self.failed += 1
             await self.tg.edit(chat_id, status_id,
@@ -97,11 +99,12 @@ class Bot:
                                f"{html.escape(str(exc)[:200])}")
             return
 
-        size_mb = len(res.pdf) / 1e6
+        size_mb = len(res.data) / 1e6
         if size_mb > 49:
             self.failed += 1
             await self.tg.edit(chat_id, status_id,
-                               f"❌ El PDF pesa {size_mb:.0f} MB, más de lo que permite Telegram.")
+                               f"❌ El {res.fmt.upper()} pesa {size_mb:.0f} MB, "
+                               f"más de lo que permite Telegram.")
             return
 
         note = {"bpc": "extensión", "bpc-html": "extensión", "static": "HTML sin JS",
@@ -111,13 +114,14 @@ class Bot:
                    + (f" · {res.chars:,} caracteres".replace(",", ".") if res.chars else ""))
         await self.tg.action(chat_id)
         try:
-            await self.tg.send_document(chat_id, res.filename, res.pdf, caption, reply_to)
+            await self.tg.send_document(chat_id, res.filename, res.data, caption,
+                                        reply_to, mime=res.mime)
             await self.tg.delete(chat_id, status_id)
             self.done += 1
         except Exception as exc:
             self.failed += 1
             log.exception("upload failed")
-            await self.tg.edit(chat_id, status_id, f"❌ No pude subir el PDF: "
+            await self.tg.edit(chat_id, status_id, f"❌ No pude subir el archivo: "
                                                    f"{html.escape(str(exc)[:200])}")
 
     async def refresher(self) -> None:
@@ -164,6 +168,8 @@ class Bot:
             return
 
         raw = low.startswith("/raw")
+        # /raw reproduces the page visually, which only a PDF can do.
+        fmt = "pdf" if raw or low.startswith("/pdf") else config.DEFAULT_FORMAT
         urls = [clean_url(u) for u in URL_RE.findall(text)]
         if not urls:
             await self.tg.send(chat_id, "Mandame un link (http/https) 🙂", reply_to=msg_id)
@@ -172,7 +178,7 @@ class Bot:
         for url in urls[:5]:
             status = await self.tg.send(chat_id, "⏳ En cola…", reply_to=msg_id)
             await self.queue.put({
-                "chat_id": chat_id, "url": url, "raw": raw,
+                "chat_id": chat_id, "url": url, "raw": raw, "fmt": fmt,
                 "reply_to": msg_id, "status_id": status["message_id"],
             })
 

@@ -1,4 +1,4 @@
-"""Render a URL to a readable PDF, with Bypass Paywalls Clean loaded."""
+"""Render a URL to a readable EPUB (or PDF), with Bypass Paywalls Clean loaded."""
 import asyncio
 import base64
 import logging
@@ -12,12 +12,15 @@ import httpx
 from playwright.async_api import Error as PWError, async_playwright
 
 import extension
+import epub
 from config import (
-    BPC_EXT_ID, DEBUG_DIR, EXT_DIR, JOB_TIMEOUT_S, LOCALE, MIN_ARTICLE_CHARS,
+    BPC_EXT_ID, DEBUG_DIR, DEFAULT_FORMAT, EPUB_COVER, EPUB_FETCH_CONCURRENCY,
+    EPUB_IMAGE_MAX_WIDTH, EPUB_IMAGE_QUALITY, EPUB_MAX_IMAGE_BYTES,
+    EPUB_MAX_IMAGES, EXT_DIR, JOB_TIMEOUT_S, LOCALE, MIN_ARTICLE_CHARS,
     NAV_TIMEOUT_MS, PROFILE_DIR, READABILITY_JS, RESTART_AFTER_JOBS, SETTLE_MS,
     TIMEZONE, TRY_ARCHIVE_FALLBACK, USER_AGENT,
 )
-from template import build as build_page
+from template import build as build_page, build_cover, build_epub_source
 
 log = logging.getLogger("render")
 
@@ -186,6 +189,8 @@ EXTRACT_JS = r"""
     title: (art && art.title || meta('meta[property="og:title"]', 'content')
             || document.title || '').trim(),
     content, chars, method,
+    lang: (document.documentElement.getAttribute('lang')
+           || meta('meta[property="og:locale"]', 'content') || '').trim(),
     byline: ((art && art.byline) || meta('meta[name="author"]', 'content') || '').trim(),
     siteName: ((art && art.siteName) || meta('meta[property="og:site_name"]', 'content') || '').trim(),
     published: ((art && art.publishedTime) || meta('meta[property="article:published_time"]', 'content')
@@ -229,6 +234,91 @@ async () => {
 }
 """
 
+# Turns the loaded article page into EPUB-ready XHTML. EPUB is XML, not HTML,
+# so the document has to come out well-formed and free of anything a reader may
+# reject; XMLSerializer over the browser's own parsed DOM guarantees that far
+# more reliably than string munging would.
+EPUBIFY_JS = r"""
+() => {
+  // Links must be absolute before <base> goes away.
+  for (const a of document.querySelectorAll('a[href]')) {
+    try { a.setAttribute('href', new URL(a.getAttribute('href'), document.baseURI).href); }
+    catch (e) { a.removeAttribute('href'); }
+  }
+
+  // Images become local files inside the zip, so image hrefs must resolve
+  // against the OEBPS folder, not the original site.
+  const images = [];
+  for (const img of [...document.images]) {
+    const src = img.currentSrc || img.src || '';
+    if (!/^https?:/i.test(src)) { img.remove(); continue; }
+    img.setAttribute('src', `__IMG${images.length}__`);
+    if (!img.getAttribute('alt')) img.setAttribute('alt', '');
+    images.push(src);
+  }
+  for (const b of document.querySelectorAll('base')) b.remove();
+
+  // Nothing scripted or interactive belongs in a book.
+  document.querySelectorAll(
+    'script,noscript,iframe,object,embed,video,audio,canvas,form,input,button,' +
+    'select,textarea,svg,map,area,style,meta[http-equiv]'
+  ).forEach(e => e.remove());
+
+  // Whitelist attributes: inline styles fight the reader's own typography and
+  // event handlers are invalid in EPUB.
+  const KEEP = new Set(['src','href','alt','title','colspan','rowspan','class','id',
+                        'lang','dir','datetime','cite','rel','type','charset']);
+  for (const el of document.querySelectorAll('*')) {
+    for (const attr of [...el.attributes]) {
+      if (!KEEP.has(attr.name.toLowerCase())) el.removeAttribute(attr.name);
+    }
+  }
+
+  // Empty wrappers left behind by the strip above just add blank space.
+  for (const el of document.querySelectorAll('article div, article span, article p')) {
+    if (!el.children.length && !(el.textContent || '').trim()) el.remove();
+  }
+
+  return {xhtml: new XMLSerializer().serializeToString(document), images};
+}
+"""
+
+# Re-encode oversized or non-portable images. WebP/AVIF are what most news
+# CDNs serve now and what many e-readers still cannot decode; a data: URL is
+# same-origin, so drawing it to a canvas does not taint it.
+TRANSCODE_JS = r"""
+async ({b64, mime, maxWidth, quality}) => {
+  const img = new Image();
+  img.src = `data:${mime};base64,${b64}`;
+  try { await img.decode(); } catch (e) { return null; }
+  const w = img.naturalWidth, h = img.naturalHeight;
+  if (!w || !h) return null;
+  const portable = mime === 'image/jpeg' || mime === 'image/png';
+  const scale = Math.min(1, maxWidth / w);
+  if (portable && scale === 1) return null;          // already fine as-is
+  const keepAlpha = mime === 'image/png';
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(w * scale));
+  c.height = Math.max(1, Math.round(h * scale));
+  const ctx = c.getContext('2d');
+  if (!keepAlpha) { ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, c.width, c.height); }
+  ctx.drawImage(img, 0, 0, c.width, c.height);
+  const out = keepAlpha ? c.toDataURL('image/png')
+                        : c.toDataURL('image/jpeg', quality);
+  if (!out.startsWith('data:image/')) return null;
+  return {b64: out.split(',')[1], mime: out.slice(5, out.indexOf(';'))};
+}
+"""
+
+# Magic-byte sniffing: CDNs mislabel Content-Type often enough that trusting
+# the header puts the wrong media-type in the manifest and breaks the book.
+_MAGIC = [
+    (b"\xff\xd8\xff", "jpg", "image/jpeg"),
+    (b"\x89PNG\r\n\x1a\n", "png", "image/png"),
+    (b"GIF87a", "gif", "image/gif"),
+    (b"GIF89a", "gif", "image/gif"),
+]
+
 PDF_OPTS = {
     "printBackground": True,
     "paperWidth": 8.27, "paperHeight": 11.69,   # A4
@@ -237,19 +327,27 @@ PDF_OPTS = {
 }
 
 
+MIME = {"epub": "application/epub+zip", "pdf": "application/pdf"}
+
+
 @dataclass
 class Result:
-    pdf: bytes
+    data: bytes
     title: str
     engine: str
     chars: int
     url: str
+    fmt: str = "epub"
 
     @property
     def filename(self) -> str:
         base = re.sub(r"[^\w\s-]", "", self.title, flags=re.UNICODE).strip()
         base = re.sub(r"[\s_]+", "-", base)[:70].strip("-") or "articulo"
-        return f"{base}.pdf"
+        return f"{base}.{self.fmt}"
+
+    @property
+    def mime(self) -> str:
+        return MIME.get(self.fmt, "application/octet-stream")
 
 
 class RenderError(RuntimeError):
@@ -468,7 +566,8 @@ class Renderer:
             await page.close()
 
     # --- public -----------------------------------------------------------
-    async def render(self, url: str, raw: bool = False) -> Result:
+    async def render(self, url: str, raw: bool = False,
+                     fmt: str = DEFAULT_FORMAT) -> Result:
         async with self._lock:
             if self._ctx is None:
                 await self.start()
@@ -476,7 +575,8 @@ class Renderer:
                 log.info("recycling browser after %d jobs", self._jobs)
                 await self.restart()
             try:
-                return await asyncio.wait_for(self._render(url, raw), timeout=JOB_TIMEOUT_S)
+                return await asyncio.wait_for(self._render(url, raw, fmt),
+                                              timeout=JOB_TIMEOUT_S)
             except asyncio.TimeoutError:
                 raise RenderError(f"tardó más de {JOB_TIMEOUT_S}s y se canceló") from None
             except PWError as exc:
@@ -486,13 +586,15 @@ class Renderer:
             finally:
                 self._jobs += 1
 
-    async def _render(self, url: str, raw: bool) -> Result:
+    async def _render(self, url: str, raw: bool, fmt: str) -> Result:
         t0 = time.monotonic()
         if raw:
+            # "The page as it looks" is a visual artefact; EPUB reflows text and
+            # has no way to express it, so /raw is always a PDF.
             _, _, pdf = await self._engine_browser(url, raw=True)
             if not pdf:
                 raise RenderError("no se pudo imprimir la página")
-            return Result(pdf, _host(url), "raw", 0, url)
+            return Result(pdf, _host(url), "raw", 0, url, "pdf")
 
         candidates: list[tuple[str, dict]] = []
         browser_art, snapshot, _ = await self._engine_browser(url, raw=False)
@@ -530,8 +632,9 @@ class Renderer:
                 f"bloquea el acceso automatizado. Probá /raw {url}"
             )
 
-        doc = build_page(
-            title=art["title"] or _host(url),
+        title = art["title"] or _host(url)
+        fields = dict(
+            title=title,
             content_html=art["content"],
             url=url,
             site=art.get("siteName") or _host(url),
@@ -539,10 +642,197 @@ class Renderer:
             published=_fmt_date(art.get("published", "")),
             engine=engine,
         )
-        pdf = await self._print_doc(doc, url)
-        log.info("rendered %s via %s: %d chars, %d KB, %.1fs",
-                 _host(url), engine, art["chars"], len(pdf) // 1024, time.monotonic() - t0)
-        return Result(pdf, art["title"] or _host(url), engine, art["chars"], url)
+        if fmt == "epub":
+            blob = await self._build_epub(art, fields)
+        else:
+            blob = await self._print_doc(build_page(**fields), url)
+        log.info("rendered %s via %s: %d chars, %s %d KB, %.1fs",
+                 _host(url), engine, art["chars"], fmt, len(blob) // 1024,
+                 time.monotonic() - t0)
+        return Result(blob, title, engine, art["chars"], url, fmt)
+
+    # --- EPUB -------------------------------------------------------------
+    async def _build_epub(self, art: dict, fields: dict) -> bytes:
+        """Load the article once more so the browser can settle its images and
+        hand back well-formed XHTML, then pack the result into an EPUB."""
+        url = fields["url"]
+        lang = (art.get("lang") or "").replace("_", "-").split("-")[0].strip().lower()
+        doc = build_epub_source(lang=lang, **fields)
+
+        page = await self._ctx.new_page()
+        # The browser is about to download every image anyway. Keeping those
+        # responses is free and exact; re-fetching them afterwards doubles the
+        # traffic and gets us rate-limited (HTTP 429) by image CDNs.
+        seen: list = []
+        page.on("response", lambda r: seen.append(r)
+                if r.request.resource_type == "image" else None)
+        try:
+            # Image CDNs frequently 403 a request with no Referer.
+            await page.set_extra_http_headers({"Referer": url})
+            await page.set_content(doc, wait_until="domcontentloaded", timeout=NAV_TIMEOUT_MS)
+            try:
+                await page.wait_for_load_state("networkidle", timeout=20000)
+            except PWError:
+                pass
+            try:
+                dropped = await page.evaluate(SETTLE_IMAGES_JS)
+                if dropped:
+                    log.info("dropped %d unloadable image(s)", dropped)
+            except PWError:
+                pass
+            out = await page.evaluate(EPUBIFY_JS)
+            # Bodies are only readable while the page is still open.
+            cached = await _drain_responses(seen)
+        finally:
+            await page.close()
+
+        xhtml, sources = out["xhtml"], out["images"]
+        images = await self._collect_images(sources, url, cached)
+        for i in range(len(sources)):
+            if i in images:
+                xhtml = xhtml.replace(f"__IMG{i}__", images[i]["href"])
+        # Anything still holding a token is an image we could not fetch; an
+        # unresolvable src makes the book invalid, so the tag has to go.
+        xhtml = re.sub(r"<img\b[^>]*__IMG\d+__[^>]*/?>", "", xhtml)
+        xhtml = f'<?xml version="1.0" encoding="utf-8"?>\n{xhtml}'
+
+        cover = None
+        if EPUB_COVER:
+            cover = await self._cover_png(fields)
+
+        return epub.build(
+            title=fields["title"],
+            article_xhtml=xhtml,
+            url=url,
+            lang=lang or ("es" if LOCALE.lower().startswith("es") else "en"),
+            author=fields["byline"],
+            site=fields["site"],
+            date=(art.get("published") or "")[:10],
+            images=[images[i] for i in sorted(images)],
+            cover_png=cover,
+        )
+
+    async def _collect_images(self, sources: list[str], referer: str,
+                              cached: dict[str, bytes]) -> dict[int, dict]:
+        """Collect every image the article kept and normalise it for e-readers.
+
+        `cached` holds the bytes the browser already downloaded while rendering;
+        only images missing from it are fetched over the network.
+        """
+        if len(sources) > EPUB_MAX_IMAGES:
+            log.info("article has %d images; keeping the first %d",
+                     len(sources), EPUB_MAX_IMAGES)
+            sources = sources[:EPUB_MAX_IMAGES]
+
+        # Paced rather than serial: a hot loop over one CDN earns HTTP 429 and
+        # loses most of the illustrations, while one-at-a-time is needlessly slow.
+        sem = asyncio.Semaphore(EPUB_FETCH_CONCURRENCY)
+
+        async def fetch(i: int, src: str) -> tuple[int, bytes | None]:
+            hit = cached.get(src)
+            if hit is not None:
+                return i, hit
+            async with sem:
+                return i, await self._fetch_image(src, referer)
+
+        fetched = await asyncio.gather(*(fetch(i, s) for i, s in enumerate(sources)))
+        reused = sum(1 for s in sources if s in cached)
+        log.debug("%d/%d image(s) reused from the page load", reused, len(sources))
+
+        collected: dict[int, dict] = {}
+        budget = EPUB_MAX_IMAGE_BYTES
+        page = None
+        try:
+            for i, data in fetched:
+                if data is None:
+                    continue
+                if budget <= 0:
+                    log.info("image budget spent; stopping at %d image(s)", len(collected))
+                    break
+                sniffed = _sniff(data)
+                if not sniffed:
+                    log.debug("unrecognised image format at index %d", i)
+                    continue
+                ext, mime = sniffed
+                # One page serves every transcode; opening one per image is
+                # far more expensive than the conversion itself.
+                if page is None:
+                    page = await self._ctx.new_page()
+                data, ext, mime = await self._transcode(page, data, ext, mime)
+                budget -= len(data)
+                collected[i] = {"id": f"img{i}", "href": f"images/img{i}.{ext}",
+                                "media_type": mime, "data": data}
+        finally:
+            if page is not None:
+                await page.close()
+        if sources:
+            log.info("embedded %d/%d image(s)", len(collected), len(sources))
+        return collected
+
+    async def _fetch_image(self, src: str, referer: str, attempts: int = 3) -> bytes | None:
+        """Fetch through the browser context so cookies and the session the
+        page already established still apply."""
+        headers = {"Referer": referer, "User-Agent": USER_AGENT,
+                   "Accept": "image/avif,image/webp,image/*,*/*;q=0.8"}
+        for attempt in range(attempts):
+            try:
+                resp = await self._ctx.request.get(src, headers=headers, timeout=20000)
+            except Exception as exc:
+                log.debug("image fetch failed (%s): %s", exc, src[:120])
+                return None
+            if resp.ok:
+                data = await resp.body()
+                return data if len(data) <= EPUB_MAX_IMAGE_BYTES else None
+            if resp.status in (429, 503) and attempt < attempts - 1:
+                delay = _retry_after(resp.headers.get("retry-after"), 1.5 * 2 ** attempt)
+                log.debug("image HTTP %s; retrying in %.1fs", resp.status, delay)
+                await asyncio.sleep(delay)
+                continue
+            log.debug("image HTTP %s: %s", resp.status, src[:120])
+            return None
+        return None
+
+    async def _transcode(self, page, data: bytes, ext: str, mime: str
+                         ) -> tuple[bytes, str, str]:
+        """Shrink oversized photos and convert formats e-readers may not decode.
+        Returns the original untouched whenever conversion is unnecessary or
+        fails — a slightly large image beats a missing one."""
+        if mime in ("image/gif", "image/svg+xml"):
+            # Re-encoding would flatten animation / rasterise vectors.
+            return data, ext, mime
+        try:
+            out = await page.evaluate(TRANSCODE_JS, {
+                "b64": base64.b64encode(data).decode(),
+                "mime": mime,
+                "maxWidth": EPUB_IMAGE_MAX_WIDTH,
+                "quality": EPUB_IMAGE_QUALITY,
+            })
+        except PWError as exc:
+            log.debug("transcode failed: %s", exc)
+            return data, ext, mime
+        if not out:
+            return data, ext, mime
+        new = base64.b64decode(out["b64"])
+        new_mime = out["mime"]
+        # Conversion occasionally inflates an already well-compressed file.
+        if new_mime == mime and len(new) >= len(data):
+            return data, ext, mime
+        return new, ("png" if new_mime == "image/png" else "jpg"), new_mime
+
+    async def _cover_png(self, fields: dict) -> bytes | None:
+        page = await self._ctx.new_page()
+        try:
+            await page.set_viewport_size({"width": 1200, "height": 1800})
+            await page.set_content(
+                build_cover(title=fields["title"], site=fields["site"],
+                            byline=fields["byline"], published=fields["published"]),
+                wait_until="domcontentloaded", timeout=20000)
+            return await page.screenshot(type="png")
+        except PWError as exc:
+            log.info("cover render failed: %s", exc)
+            return None
+        finally:
+            await page.close()
 
     async def _print_doc(self, doc_html: str, url: str) -> bytes:
         page = await self._ctx.new_page()
@@ -566,6 +856,43 @@ class Renderer:
             return base64.b64decode(res["data"])
         finally:
             await page.close()
+
+
+async def _drain_responses(responses: list) -> dict[str, bytes]:
+    """Read the bodies of the image responses the page collected. Chromium
+    discards them once the page closes, so this must run before that."""
+    out: dict[str, bytes] = {}
+    for resp in responses:
+        if resp.url in out or not resp.ok:
+            continue
+        try:
+            out[resp.url] = await resp.body()
+        except Exception:
+            pass          # redirects and aborted requests have no body
+    return out
+
+
+def _retry_after(header: str | None, fallback: float) -> float:
+    """Honour Retry-After when the CDN sends one, but never stall the job."""
+    try:
+        return min(float(header), 8.0) if header else fallback
+    except (TypeError, ValueError):
+        return fallback
+
+
+def _sniff(data: bytes) -> tuple[str, str] | None:
+    """Identify an image by its magic bytes. Returns (extension, media type)."""
+    for magic, ext, mime in _MAGIC:
+        if data.startswith(magic):
+            return ext, mime
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "webp", "image/webp"
+    if data[4:8] == b"ftyp" and data[8:12] in (b"avif", b"avis"):
+        return "avif", "image/avif"
+    head = data[:512].lstrip()
+    if head.startswith(b"<?xml") or head.startswith(b"<svg"):
+        return "svg", "image/svg+xml"
+    return None
 
 
 def _host(url: str) -> str:

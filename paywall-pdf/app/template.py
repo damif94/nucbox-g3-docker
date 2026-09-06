@@ -96,3 +96,86 @@ def LANG_GUESS(url: str) -> str:
     if host.endswith((".uy", ".ar", ".es", ".mx", ".cl", ".co")):
         return "es"
     return "en"
+
+
+def build_epub_source(*, title: str, content_html: str, url: str, site: str = "",
+                      byline: str = "", published: str = "", engine: str = "",
+                      lang: str = "") -> str:
+    """HTML for the EPUB's article document, loaded in the browser first.
+
+    Unlike `build()` this carries no print CSS and no inline styles: it links
+    the stylesheet that ships inside the EPUB, and keeps `<base>` only so the
+    original image URLs still resolve while the page loads. render.py strips
+    the base, rewrites the images to local hrefs and serialises the result to
+    well-formed XHTML.
+    """
+    esc = html.escape
+    sub = " · ".join(x for x in (byline.strip(), published.strip()) if x)
+    return f"""<!doctype html>
+<html lang="{esc(lang or LANG_GUESS(url))}">
+<head>
+<meta charset="utf-8">
+<base href="{esc(url, quote=True)}">
+<title>{esc(title)}</title>
+<link rel="stylesheet" type="text/css" href="style.css">
+</head>
+<body>
+<header class="meta">
+  <p class="site">{esc(site or _host(url))}</p>
+  <h1 class="title">{esc(title)}</h1>
+  {f'<p class="byline">{esc(sub)}</p>' if sub else ''}
+</header>
+<hr class="rule">
+<article>
+{content_html}
+</article>
+<footer class="source">
+  <p>{esc(url)}</p>
+  <p>Bypass Paywalls Clean{f' · {esc(engine)}' if engine else ''}</p>
+</footer>
+</body>
+</html>"""
+
+
+COVER_CSS = """
+html, body { margin: 0; padding: 0; width: 100%; height: 100%; }
+body {
+  display: flex; flex-direction: column; justify-content: space-between;
+  box-sizing: border-box; padding: 90px 80px 70px;
+  background: #f7f4ee; color: #1a1a1a;
+  font-family: Georgia, "Times New Roman", serif;
+  border-top: 26px solid #8a6a3b;
+}
+.site {
+  font-family: -apple-system, "Helvetica Neue", Arial, sans-serif;
+  font-size: 30px; font-weight: 700; letter-spacing: .16em;
+  text-transform: uppercase; color: #8a6a3b;
+}
+h1 {
+  font-size: 78px; line-height: 1.14; font-weight: 700; margin: 0;
+  /* Long headlines must shrink rather than overflow the cover. */
+  overflow: hidden; max-height: 8.4em;
+}
+h1.long { font-size: 58px; }
+h1.xlong { font-size: 46px; }
+.meta { font-size: 27px; font-style: italic; color: #555; line-height: 1.5; }
+.rule { border: 0; border-top: 2px solid #cdbfa6; margin: 44px 0; }
+"""
+
+
+def build_cover(*, title: str, site: str, byline: str = "", published: str = "") -> str:
+    """A standalone page screenshotted into the EPUB cover image.
+
+    E-reader libraries are browsed by cover, so an article with no cover is
+    hard to find again; this gives every one a legible, consistent thumbnail.
+    """
+    esc = html.escape
+    size = "xlong" if len(title) > 110 else "long" if len(title) > 60 else ""
+    sub = " · ".join(x for x in (byline.strip(), published.strip()) if x)
+    return f"""<!doctype html>
+<html><head><meta charset="utf-8"><style>{COVER_CSS}</style></head>
+<body>
+<div><div class="site">{esc(site)}</div><hr class="rule"></div>
+<h1 class="{size}">{esc(title)}</h1>
+<div><hr class="rule"><div class="meta">{esc(sub)}</div></div>
+</body></html>"""

@@ -46,12 +46,23 @@ This file contains project-specific context for Claude Code.
 - Mounts are declared in `emby/docker-compose.yml`. Changing them requires **`docker compose up -d` to recreate** the container — a plain `docker restart` does **not** pick up new volumes.
 - `/media-toshiba` rides on the Toshiba USB drive, so it inherits that drive's mount fragility (see Storage note ¹); if the drive drops and falls through to a stale mount layer, the library errors until a clean remount/reboot.
 
-#### paywall-pdf (Bypass Paywalls → PDF over Telegram)
+#### paywall-pdf (Bypass Paywalls → EPUB over Telegram)
 
-Send a link to the Telegram bot and get the article back as a clean PDF — the
-workaround for mobile Chrome not supporting extensions. Runs one headless
+Send a link to the Telegram bot and get the article back as a clean **EPUB** —
+the workaround for mobile Chrome not supporting extensions. Runs one headless
 Chromium with the *Bypass Paywalls Clean* extension loaded (`paywall-pdf/`, see
 its README for the engine details).
+
+- **EPUB is the default output**; the directory keeps its original name. PDF is
+  still reachable per request: `/pdf <link>` for the same reading-mode article,
+  and `/raw <link>` for the page as it looks — which stays PDF because a
+  reflowable format cannot express a visual page reproduction.
+- Images are embedded into the book from the responses the render page already
+  downloaded. Do **not** "simplify" this into re-fetching the image URLs
+  afterwards: image CDNs answer a burst from one article with HTTP 429, which
+  cost 105 of 115 images on a test page.
+- WebP/AVIF are transcoded to JPEG (many e-readers can't decode them) and photos
+  scaled to 1200px; GIF and SVG are passed through untouched.
 
 | Host path | Container path | Notes |
 |---|---|---|
@@ -71,6 +82,9 @@ its README for the engine details).
 - Bot token: `PAYWALL_BOT_TOKEN` in `.env`, falling back to the shared
   `TELEGRAM_BOT_TOKEN` (watchtower's bot). Sharing is safe — watchtower only
   sends, so it never competes for `getUpdates`.
+- The CLI (`cli.py`) opens the same Chrome profile as the running container and
+  clears its lock at startup. When testing while the bot is up, always pass
+  `-e PROFILE_DIR=/tmp/testprofile`.
 
 #### Samba (SMB) share of the Toshiba drive
 

@@ -74,14 +74,15 @@ class Telegram:
             pass
 
     async def send_document(self, chat_id: int, filename: str, blob: bytes,
-                            caption: str = "", reply_to: int | None = None) -> None:
+                            caption: str = "", reply_to: int | None = None,
+                            mime: str = "application/octet-stream") -> None:
         data = {"chat_id": str(chat_id), "caption": caption[:1024], "parse_mode": "HTML"}
         if reply_to:
             data["reply_to_message_id"] = str(reply_to)
         for attempt in (1, 2):
             r = await self._client.post(
                 f"{self._base}/sendDocument", data=data,
-                files={"document": (filename, blob, "application/pdf")},
+                files={"document": (filename, blob, mime)},
             )
             payload = r.json()
             if payload.get("ok"):

@@ -52,3 +52,20 @@ MIN_ARTICLE_CHARS = int(_env("MIN_ARTICLE_CHARS", default="600"))
 RESTART_AFTER_JOBS = int(_env("RESTART_AFTER_JOBS", default="25"))
 TRY_ARCHIVE_FALLBACK = _env("TRY_ARCHIVE_FALLBACK", default="1") == "1"
 DEBUG_RETENTION_DAYS = int(_env("DEBUG_RETENTION_DAYS", default="7"))
+
+# --- EPUB -----------------------------------------------------------------
+# Default output. PDF stays reachable per-request (/pdf, and /raw which has no
+# EPUB equivalent since it reproduces the page visually).
+DEFAULT_FORMAT = _env("DEFAULT_FORMAT", default="epub")
+# Photos are re-encoded down to this width: e-readers gain nothing from a
+# 3000px original, and it keeps the book small enough to send over Telegram.
+EPUB_IMAGE_MAX_WIDTH = int(_env("EPUB_IMAGE_MAX_WIDTH", default="1200"))
+EPUB_IMAGE_QUALITY = float(_env("EPUB_IMAGE_QUALITY", default="0.82"))
+EPUB_MAX_IMAGE_BYTES = int(_env("EPUB_MAX_IMAGE_BYTES", default=str(12 * 1024 * 1024)))
+# A news article carries a handful of photos; anything past this is gallery
+# cruft that only bloats the book (a Wikipedia page can reach 150 images).
+EPUB_MAX_IMAGES = int(_env("EPUB_MAX_IMAGES", default="40"))
+# Image CDNs rate-limit a burst of requests coming from one page, so fetches
+# are paced rather than fired all at once.
+EPUB_FETCH_CONCURRENCY = int(_env("EPUB_FETCH_CONCURRENCY", default="4"))
+EPUB_COVER = _env("EPUB_COVER", default="1") == "1"
