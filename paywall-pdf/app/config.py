@@ -49,6 +49,13 @@ NAV_TIMEOUT_MS = int(_env("NAV_TIMEOUT_MS", default="60000"))
 JOB_TIMEOUT_S = int(_env("JOB_TIMEOUT_S", default="180"))
 SETTLE_MS = int(_env("SETTLE_MS", default="3500"))
 MIN_ARTICLE_CHARS = int(_env("MIN_ARTICLE_CHARS", default="600"))
+# An anti-bot interstitial ("Access Issue Help", Cloudflare's "Just a moment…")
+# is a real page with real prose, so a bare length check waves it through — the
+# Telegraph's Akamai/TollBit block weighs 888 chars, comfortably over
+# MIN_ARTICLE_CHARS. Extractions shorter than this are therefore also screened
+# for block markers and for the HTTP status the navigation returned; anything
+# longer is assumed to be a genuine article.
+BLOCK_MAX_CHARS = int(_env("BLOCK_MAX_CHARS", default="2500"))
 RESTART_AFTER_JOBS = int(_env("RESTART_AFTER_JOBS", default="25"))
 TRY_ARCHIVE_FALLBACK = _env("TRY_ARCHIVE_FALLBACK", default="1") == "1"
 DEBUG_RETENTION_DAYS = int(_env("DEBUG_RETENTION_DAYS", default="7"))

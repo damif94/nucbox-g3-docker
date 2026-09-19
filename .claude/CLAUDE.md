@@ -63,6 +63,16 @@ its README for the engine details).
   cost 105 of 115 images on a test page.
 - WebP/AVIF are transcoded to JPEG (many e-readers can't decode them) and photos
   scaled to 1200px; GIF and SVG are passed through untouched.
+- **An extraction that looks like a wall is discarded, not ranked.** The engines
+  compete on extracted length, and an anti-bot interstitial is prose: The
+  Telegraph's Akamai/TollBit notice parses as a clean 888-char "article", beat
+  the 600-char floor and was delivered as if it were the piece. A candidate is
+  now dropped on a 4xx/5xx navigation status, or on a wall marker when under
+  `BLOCK_MAX_CHARS` (2500) — which is what lets the archive.today fallback fire.
+  Never raise `MIN_ARTICLE_CHARS` to paper over this: short articles are real.
+- **telegraph.co.uk only works through archive.today now.** BPC's rule for it
+  blocks Piano's `tinypass.com`, but the wall moved to the edge (HTTP 402 for
+  browser *and* plain fetch), so nothing local can get past it.
 
 | Host path | Container path | Notes |
 |---|---|---|

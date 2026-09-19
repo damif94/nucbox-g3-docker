@@ -14,7 +14,8 @@ from playwright.async_api import Error as PWError, async_playwright
 import extension
 import epub
 from config import (
-    BPC_EXT_ID, DEBUG_DIR, DEFAULT_FORMAT, EPUB_COVER, EPUB_FETCH_CONCURRENCY,
+    BLOCK_MAX_CHARS, BPC_EXT_ID, DEBUG_DIR, DEFAULT_FORMAT, EPUB_COVER,
+    EPUB_FETCH_CONCURRENCY,
     EPUB_IMAGE_MAX_WIDTH, EPUB_IMAGE_QUALITY, EPUB_MAX_IMAGE_BYTES,
     EPUB_MAX_IMAGES, EXT_DIR, JOB_TIMEOUT_S, LOCALE, MIN_ARTICLE_CHARS,
     NAV_TIMEOUT_MS, PROFILE_DIR, READABILITY_JS, RESTART_AFTER_JOBS, SETTLE_MS,
@@ -329,6 +330,38 @@ PDF_OPTS = {
 
 MIME = {"epub": "application/epub+zip", "pdf": "application/pdf"}
 
+# Phrases that only ever appear on an anti-bot wall, a captcha interstitial or
+# an edge-level rejection — never in the body of an article about them, at the
+# length these pages run to. Matched only against short extractions (see
+# BLOCK_MAX_CHARS), so an article *discussing* bot walls is not thrown away.
+BLOCK_MARKERS = re.compile(
+    r"access issue help|tollbit|ak_ref_id|unusual activity on this connection"
+    r"|enable javascript and cookies to continue|checking your browser before"
+    r"|verify (?:you are|yourself as) (?:a )?human|are you a robot"
+    r"|attention required!|请开启 ?javascript|access to this page has been denied"
+    r"|you (?:don'?t|do not) have permission to access|request (?:blocked|unsuccessful)"
+    r"|error 10\d\d|cf-error-details|robot or human",
+    re.IGNORECASE,
+)
+
+
+def _block_reason(art: dict, status: int | None = None) -> str | None:
+    """Why this extraction looks like a wall or an error, rather than the article.
+
+    A 4xx/5xx body is by definition not the page that was asked for, however
+    much prose it carries — a "Page Not Found" reads as a perfectly good
+    article to Readability. Marker matching is the looser test, so it is
+    confined to short extractions: an article *about* bot walls keeps its
+    wording, an 888-character Akamai notice does not.
+    """
+    if status is not None and status >= 400:
+        return f"HTTP {status}"
+    if art["chars"] >= BLOCK_MAX_CHARS:
+        return None
+    text = re.sub(r"<[^>]+>", " ", art.get("content") or "")
+    hit = BLOCK_MARKERS.search(f"{art.get('title', '')} {text}")
+    return f"block page ({hit.group(0).strip().lower()})" if hit else None
+
 
 @dataclass
 class Result:
@@ -451,16 +484,19 @@ class Renderer:
 
     # --- engines ----------------------------------------------------------
     async def _engine_browser(self, url: str, raw: bool
-                              ) -> tuple[dict | None, str | None, bytes | None]:
+                              ) -> tuple[dict | None, str | None, bytes | None, int | None]:
         """Load the URL in Chromium with BPC active.
 
-        Returns (article, rendered_html, raw_pdf). The HTML snapshot carries the
-        extension's DOM changes and feeds a second extraction attempt, because
-        Readability sometimes fails on a live page it handles fine statically.
+        Returns (article, rendered_html, raw_pdf, http_status). The HTML
+        snapshot carries the extension's DOM changes and feeds a second
+        extraction attempt, because Readability sometimes fails on a live page
+        it handles fine statically. The status tells a served article apart
+        from an edge-level rejection that merely looks like one.
         """
         page = await self._ctx.new_page()
         try:
-            await page.goto(url, wait_until="domcontentloaded", timeout=NAV_TIMEOUT_MS)
+            resp = await page.goto(url, wait_until="domcontentloaded", timeout=NAV_TIMEOUT_MS)
+            status = resp.status if resp else None
             try:
                 await page.wait_for_load_state("networkidle", timeout=20000)
             except PWError:
@@ -484,15 +520,15 @@ class Renderer:
                 await page.wait_for_timeout(600)
                 cdp = await self._ctx.new_cdp_session(page)
                 res = await cdp.send("Page.printToPDF", {**PDF_OPTS, "preferCSSPageSize": False})
-                return None, None, base64.b64decode(res["data"])
+                return None, None, base64.b64decode(res["data"]), status
 
             snapshot = await page.content()
             await page.add_script_tag(path=READABILITY_JS)
             art = await page.evaluate(EXTRACT_JS)
             if art.get("error"):
                 log.info("browser extract: %s", art["error"])
-                return None, snapshot, None
-            return art, snapshot, None
+                return None, snapshot, None, status
+            return art, snapshot, None, status
         finally:
             await page.close()
 
@@ -514,7 +550,7 @@ class Renderer:
                         break
                     log.info("static fetch %s -> HTTP %s (%d bytes)", ua[:24], r.status_code, len(r.text))
                 except httpx.HTTPError as exc:
-                    log.info("static fetch failed: %s", exc)
+                    log.info("static fetch failed: %s", str(exc) or type(exc).__name__)
         if not html_text:
             return None
         return await self._parse_html(html_text, url)
@@ -591,29 +627,35 @@ class Renderer:
         if raw:
             # "The page as it looks" is a visual artefact; EPUB reflows text and
             # has no way to express it, so /raw is always a PDF.
-            _, _, pdf = await self._engine_browser(url, raw=True)
+            _, _, pdf, _ = await self._engine_browser(url, raw=True)
             if not pdf:
                 raise RenderError("no se pudo imprimir la página")
             return Result(pdf, _host(url), "raw", 0, url, "pdf")
 
         candidates: list[tuple[str, dict]] = []
-        browser_art, snapshot, _ = await self._engine_browser(url, raw=False)
-        if browser_art:
-            candidates.append(("bpc", browser_art))
-            log.info("bpc engine: %d chars (%s)", browser_art["chars"], browser_art.get("method"))
+        blocked: list[tuple[str, str]] = []
+
+        def offer(engine: str, art: dict | None, status: int | None = None) -> None:
+            """Keep an extraction unless it is visibly a wall, not the article."""
+            if not art:
+                return
+            reason = _block_reason(art, status)
+            log.info("%s engine: %d chars (%s)%s", engine, art["chars"],
+                     art.get("method"), f" — rejected: {reason}" if reason else "")
+            if reason:
+                blocked.append((engine, reason))
+            else:
+                candidates.append((engine, art))
+
+        browser_art, snapshot, _, status = await self._engine_browser(url, raw=False)
+        offer("bpc", browser_art, status)
 
         # Same page, but parsed as static HTML — recovers articles where
         # Readability trips over the live DOM (e.g. wired.com).
         if snapshot and (not browser_art or browser_art["chars"] < 20000):
-            snap_art = await self._parse_html(snapshot, url)
-            if snap_art:
-                candidates.append(("bpc-html", snap_art))
-                log.info("bpc-html engine: %d chars (%s)", snap_art["chars"], snap_art.get("method"))
+            offer("bpc-html", await self._parse_html(snapshot, url), status)
 
-        static_art = await self._engine_static(url)
-        if static_art:
-            candidates.append(("static", static_art))
-            log.info("static engine: %d chars (%s)", static_art["chars"], static_art.get("method"))
+        offer("static", await self._engine_static(url))
 
         best = max(candidates, key=lambda c: c[1]["chars"], default=None)
         if (not best or best[1]["chars"] < MIN_ARTICLE_CHARS) and TRY_ARCHIVE_FALLBACK:
@@ -624,6 +666,12 @@ class Renderer:
                 best = max(candidates, key=lambda c: c[1]["chars"])
 
         if not best:
+            if blocked:
+                why = ", ".join(f"{eng}: {reason}" for eng, reason in blocked)
+                raise RenderError(
+                    f"no se pudo obtener el artículo ({why}) y archive.today no tiene "
+                    f"una copia. Probá /raw {url}"
+                )
             raise RenderError("no se pudo extraer el artículo (el sitio bloqueó el acceso)")
         engine, art = best
         if art["chars"] < MIN_ARTICLE_CHARS:

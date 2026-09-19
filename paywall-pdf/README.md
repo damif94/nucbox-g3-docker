@@ -27,7 +27,22 @@ everything:
 | `archive` | archive.today snapshot | Sites blocking us at the edge (wsj.com returns HTTP 401) |
 
 Extraction uses Mozilla Readability, falling back to a densest-paragraph-container
-heuristic when Readability misjudges the page. The winner is then packaged as an
+heuristic when Readability misjudges the page.
+
+Before an extraction is allowed to compete it has to look like an article at
+all. An anti-bot interstitial is prose too: The Telegraph's Akamai/TollBit
+notice ("Access Issue Help", served with HTTP 402) parses as a clean
+888-character article, sails past `MIN_ARTICLE_CHARS` and wins the race against
+engines that got nothing. So a candidate is dropped when the navigation
+returned 4xx/5xx, or — for extractions under `BLOCK_MAX_CHARS` (2500) — when it
+matches a wall marker (TollBit, `ak_ref_id`, "checking your browser",
+"verify you are human"…). The length guard keeps an article *about* bot walls
+from being thrown out for quoting one. Dropping the wall is what lets the
+archive fallback fire: the same Telegraph link then comes back whole, 7,848
+chars via `archive`. When everything is dropped and archive.today has no copy,
+the bot says which engine hit what instead of sending a PDF of the wall.
+
+The winner is then packaged as an
 EPUB 3 (see below), or — for `/pdf` and `/raw` — re-typeset into a print
 stylesheet (A4, serif, images capped) and printed via CDP `Page.printToPDF`.
 
@@ -118,6 +133,11 @@ processes open the same profile at once.
 - Sites that block datacenter *and* residential automation still fail; they fall
   through to archive.today, which itself rate-limits (HTTP 429) and may only
   hold an older snapshot.
+- **telegraph.co.uk now blocks us at the edge** (Akamai + TollBit, HTTP 402 for
+  both the browser and the plain fetch — BPC's rule for it only blocks Piano's
+  `tinypass.com`, which no longer is where the wall lives). It works only
+  through archive.today, and its Googlebot retry burns 30s on a read timeout
+  before the fallback starts.
 - BPC is bound to `host_permissions` for ~970 domains. Anything outside that
   list only gets the generic engines.
 - Renders are serialised (one at a time) — this box has 4 cores.
