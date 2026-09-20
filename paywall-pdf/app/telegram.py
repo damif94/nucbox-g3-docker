@@ -27,6 +27,15 @@ class Telegram:
     async def me(self) -> dict:
         return await self._call("getMe")
 
+    async def set_my_commands(self, commands: list[tuple[str, str]]) -> None:
+        """Publish the command index. Cosmetic, so a failure must not stop the
+        bot from starting."""
+        try:
+            await self._call("setMyCommands", commands=[
+                {"command": c, "description": d[:256]} for c, d in commands])
+        except (RuntimeError, httpx.HTTPError) as exc:
+            log.warning("setMyCommands failed: %s", exc)
+
     async def get_updates(self, timeout: int = 50) -> list[dict]:
         try:
             updates = await self._call(

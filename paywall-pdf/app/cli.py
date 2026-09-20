@@ -1,14 +1,14 @@
 """Render URLs from the command line — for debugging without Telegram.
 
     docker compose run --rm --entrypoint python3 paywall-pdf \\
-      cli.py <url> [--pdf] [--raw]
+      cli.py <url> [--pdf] [--epub] [--raw] [--size=a4]
 """
 import asyncio
 import logging
 import sys
 from pathlib import Path
 
-from config import DEBUG_DIR, DEFAULT_FORMAT
+from config import DEBUG_DIR, DEFAULT_FORMAT, PAGE_NAMES, page_profile
 from render import Renderer
 
 logging.basicConfig(level=logging.INFO,
@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.INFO,
                     datefmt="%H:%M:%S")
 
 
-async def main(urls: list[str], raw: bool, fmt: str) -> int:
+async def main(urls: list[str], raw: bool, fmt: str, page: dict | None) -> int:
     out = Path(DEBUG_DIR)
     out.mkdir(parents=True, exist_ok=True)
     r = Renderer()
@@ -25,7 +25,7 @@ async def main(urls: list[str], raw: bool, fmt: str) -> int:
     try:
         for url in urls:
             try:
-                res = await r.render(url, raw=raw, fmt=fmt)
+                res = await r.render(url, raw=raw, fmt=fmt, page=page)
             except Exception as exc:
                 failures += 1
                 print(f"FAIL  {url}\n      {exc}", flush=True)
@@ -43,7 +43,13 @@ if __name__ == "__main__":
     flags = {a for a in sys.argv[1:] if a.startswith("--")}
     args = [a for a in sys.argv[1:] if not a.startswith("--")]
     if not args:
-        sys.exit("usage: cli.py <url>... [--pdf] [--raw]")
+        sys.exit("usage: cli.py <url>... [--pdf] [--epub] [--raw] [--size=<name>]")
     raw = "--raw" in flags
-    fmt = "pdf" if raw or "--pdf" in flags else DEFAULT_FORMAT
-    sys.exit(min(asyncio.run(main(args, raw, fmt)), 1))
+    fmt = ("pdf" if raw or "--pdf" in flags else
+           "epub" if "--epub" in flags else DEFAULT_FORMAT)
+    size = next((f.split("=", 1)[1] for f in flags if f.startswith("--size=")), "")
+    try:
+        page = page_profile(size) if size else None
+    except KeyError:
+        sys.exit(f"unknown size {size!r}; have: {', '.join(PAGE_NAMES)}")
+    sys.exit(min(asyncio.run(main(args, raw, fmt, page)), 1))

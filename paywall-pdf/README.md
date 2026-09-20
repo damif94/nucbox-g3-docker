@@ -1,16 +1,16 @@
 # paywall-pdf
 
-Send a link to Telegram, get the article back as a clean **EPUB** — the phone
-substitute for the *Bypass Paywalls Clean* Chrome extension, which mobile Chrome
-can't run.
+Send a link to Telegram, get the article back as a clean **PDF cut to the phone
+screen** — the phone substitute for the *Bypass Paywalls Clean* Chrome
+extension, which mobile Chrome can't run.
 
 ```
 phone ──link──▶ Telegram ──long poll──▶ paywall-pdf ──▶ headless Chromium + BPC
-                    ◀────── EPUB ─────────────────────────────────┘
+                    ◀─────── PDF ─────────────────────────────────┘
 ```
 
-> The directory keeps its original name; PDF is still available per request
-> (`/pdf`, and `/raw` which has no EPUB equivalent).
+> EPUB stays one command away (`/epub`), and is still the better format for an
+> e-reader — see [Why EPUB is still there](#why-epub-is-still-there).
 
 ## How it works
 
@@ -44,7 +44,7 @@ the bot says which engine hit what instead of sending a PDF of the wall.
 
 The winner is then packaged as an
 EPUB 3 (see below), or — for `/pdf` and `/raw` — re-typeset into a print
-stylesheet (A4, serif, images capped) and printed via CDP `Page.printToPDF`.
+stylesheet (serif, images capped) and printed via CDP `Page.printToPDF`.
 
 Two details matter more than they look:
 
@@ -58,10 +58,48 @@ Two details matter more than they look:
 BPC registers its ~800 blocking rules dynamically from an MV3 service worker, so
 startup waits for those rules to be live before accepting any job.
 
-## Why EPUB
+## PDF page size
 
-A PDF has fixed A4 pages, so a phone or e-reader either shows unreadably small
-text or forces horizontal panning. EPUB reflows to the device, and the reader's
+`Page.printToPDF` measures paper in inches and lays the page out at 96 CSS px
+per inch, so a **375/96 × 812/96 in** page *is* the iPhone 13 mini viewport
+(375 × 812 pt): one PDF page is exactly one screenful, with nothing to
+pinch-zoom or pan. That is the `iphone` profile, and the default.
+
+| Name | Size | | Name | Size |
+|---|---|---|---|---|
+| `iphone` | 99 × 215 mm (13 mini screen) | | `a5` | 148 × 210 mm |
+| `a4` | 210 × 297 mm | | `a6` | 105 × 148 mm |
+| `letter` | 216 × 279 mm | | `legal` | 216 × 356 mm |
+
+Any request can name one: `/pdf a4 <link>`, `/raw a5 <link>` (also `carta`,
+`oficio`, `iphone13mini`). Only the word right after the command is read as a
+size — a forwarded link with prose in front of it would otherwise have its
+first word taken for a botched size name. EPUB ignores the argument and says
+so, since a reflowable book has no page size.
+
+Typography is **interpolated between two hand-tuned ends** — the phone page
+(99 mm wide, 11 pt, ragged right) and A4 (210 mm, 12 pt, justified) — so
+margins, type scale and the image height cap land consistently on any size
+instead of each needing its own table. Values outside that span are clamped,
+not extrapolated: type does not keep shrinking sensibly below a phone screen.
+A new size is therefore one line in `config.PAGE_SIZES_IN`.
+
+`/raw` has no stylesheet of ours, so it takes the paper from `pdf_opts()` —
+which also makes the captured page re-flow at that width, i.e. the site's own
+mobile layout on the narrow profiles.
+
+`PAYWALL_PDF_PAGE` sets the default for a request that names no size, and
+`PAYWALL_DEFAULT_FORMAT=epub` goes back to books by default.
+
+> Blink shrinks the whole document to fit its widest unbreakable box, so a page
+> with a wide table (a Wikipedia infobox, say) comes out scaled down — the
+> narrower the paper, the more visible that is.
+
+## Why EPUB is still there
+
+A PDF has fixed pages: sizing them to the iPhone 13 mini makes it the right
+format *on that phone*, and the wrong one everywhere else. EPUB reflows to
+whatever device opens it, and the reader's
 own font, size, margins and dark mode all keep working — so the stylesheet
 deliberately sets **no** body colour, background or font size, and styles only
 small meta text in tones that survive inversion.
@@ -88,11 +126,15 @@ Building a valid book takes more than renaming the output:
 
 Message the bot:
 
-- `<link>` — clean reading-mode EPUB (several links per message is fine)
-- `/pdf <link>` — the same article, as a PDF
-- `/raw <link>` — the page printed as-is, ads and all (PDF: reproducing the page
-  visually is not something EPUB can express)
-- `/status` — extension version, rule count, counters
+- `<link>` — clean reading-mode PDF, phone-sized (several links per message is
+  fine; `/pdf` does the same thing explicitly)
+- `/pdf [size] <link>` — same, on any page size (`/pdf a4 <link>`; see above)
+- `/epub <link>` — the same article, as an EPUB
+- `/raw [size] <link>` — the page printed as-is, ads and all (PDF: reproducing
+  the page visually is not something EPUB can express)
+- `/start`, `/help` — the command index, generated from `main.COMMANDS` — the
+  same list the bot publishes to Telegram's menu button via `setMyCommands`
+- `/status` — extension version, rule count, counters, default page size
 - `/update` — pull the newest BPC build and restart the browser
 
 Only chat IDs in `PAYWALL_ALLOWED_CHAT_IDS` (default: `TELEGRAM_CHAT_ID`) are
@@ -119,7 +161,7 @@ State lives in `/srv/data/paywall-pdf/`:
 
 ```bash
 docker compose --env-file ../.env run --rm --entrypoint python3 paywall-pdf \
-  cli.py "https://example.com/article" [--pdf] [--raw]
+  cli.py "https://example.com/article" [--pdf] [--epub] [--raw] [--size=a4]
 ```
 
 Writes to `/srv/data/paywall-pdf/debug/` and logs which engine won and why.

@@ -18,8 +18,8 @@ from config import (
     EPUB_FETCH_CONCURRENCY,
     EPUB_IMAGE_MAX_WIDTH, EPUB_IMAGE_QUALITY, EPUB_MAX_IMAGE_BYTES,
     EPUB_MAX_IMAGES, EXT_DIR, JOB_TIMEOUT_S, LOCALE, MIN_ARTICLE_CHARS,
-    NAV_TIMEOUT_MS, PROFILE_DIR, READABILITY_JS, RESTART_AFTER_JOBS, SETTLE_MS,
-    TIMEZONE, TRY_ARCHIVE_FALLBACK, USER_AGENT,
+    NAV_TIMEOUT_MS, PAGE, PDF_PAGE, PROFILE_DIR, READABILITY_JS,
+    RESTART_AFTER_JOBS, SETTLE_MS, TIMEZONE, TRY_ARCHIVE_FALLBACK, USER_AGENT,
 )
 from template import build as build_page, build_cover, build_epub_source
 
@@ -320,12 +320,18 @@ _MAGIC = [
     (b"GIF89a", "gif", "image/gif"),
 ]
 
-PDF_OPTS = {
-    "printBackground": True,
-    "paperWidth": 8.27, "paperHeight": 11.69,   # A4
-    "marginTop": 0.0, "marginBottom": 0.0, "marginLeft": 0.0, "marginRight": 0.0,
-    "preferCSSPageSize": True,
-}
+# Paper comes from the page profile the request asked for — by default the
+# iPhone 13 mini screen, so a page needs no zooming on the phone. The article
+# PDF sets the same size in CSS (preferCSSPageSize); /raw has no stylesheet of
+# ours and takes it from here, which also re-lays the captured page out at the
+# chosen width.
+def pdf_opts(page: dict = PAGE) -> dict:
+    return {
+        "printBackground": True,
+        "paperWidth": page["width_in"], "paperHeight": page["height_in"],
+        "marginTop": 0.0, "marginBottom": 0.0, "marginLeft": 0.0, "marginRight": 0.0,
+        "preferCSSPageSize": True,
+    }
 
 
 MIME = {"epub": "application/epub+zip", "pdf": "application/pdf"}
@@ -371,6 +377,8 @@ class Result:
     chars: int
     url: str
     fmt: str = "epub"
+    # Page size this PDF was laid out for; empty for EPUB, which reflows.
+    page: str = ""
 
     @property
     def filename(self) -> str:
@@ -439,7 +447,8 @@ class Renderer:
         self._ctx.set_default_navigation_timeout(NAV_TIMEOUT_MS)
         self.rules = await self._wait_for_extension()
         self._jobs = 0
-        log.info("browser up: BPC %s, %d blocking rules active", self.ext_version, self.rules)
+        log.info("browser up: BPC %s, %d blocking rules active, PDF page %s",
+                 self.ext_version, self.rules, PDF_PAGE)
 
     async def _wait_for_extension(self, timeout_s: int = 45) -> int:
         """Wait until the MV3 service worker has registered its blocking rules."""
@@ -483,7 +492,7 @@ class Renderer:
         await self.start()
 
     # --- engines ----------------------------------------------------------
-    async def _engine_browser(self, url: str, raw: bool
+    async def _engine_browser(self, url: str, raw: bool, page_profile: dict = PAGE
                               ) -> tuple[dict | None, str | None, bytes | None, int | None]:
         """Load the URL in Chromium with BPC active.
 
@@ -519,7 +528,8 @@ class Renderer:
                 await page.emulate_media(media="screen")
                 await page.wait_for_timeout(600)
                 cdp = await self._ctx.new_cdp_session(page)
-                res = await cdp.send("Page.printToPDF", {**PDF_OPTS, "preferCSSPageSize": False})
+                res = await cdp.send("Page.printToPDF",
+                                     {**pdf_opts(page_profile), "preferCSSPageSize": False})
                 return None, None, base64.b64decode(res["data"]), status
 
             snapshot = await page.content()
@@ -603,7 +613,7 @@ class Renderer:
 
     # --- public -----------------------------------------------------------
     async def render(self, url: str, raw: bool = False,
-                     fmt: str = DEFAULT_FORMAT) -> Result:
+                     fmt: str = DEFAULT_FORMAT, page: dict | None = None) -> Result:
         async with self._lock:
             if self._ctx is None:
                 await self.start()
@@ -611,7 +621,7 @@ class Renderer:
                 log.info("recycling browser after %d jobs", self._jobs)
                 await self.restart()
             try:
-                return await asyncio.wait_for(self._render(url, raw, fmt),
+                return await asyncio.wait_for(self._render(url, raw, fmt, page or PAGE),
                                               timeout=JOB_TIMEOUT_S)
             except asyncio.TimeoutError:
                 raise RenderError(f"tardó más de {JOB_TIMEOUT_S}s y se canceló") from None
@@ -622,15 +632,15 @@ class Renderer:
             finally:
                 self._jobs += 1
 
-    async def _render(self, url: str, raw: bool, fmt: str) -> Result:
+    async def _render(self, url: str, raw: bool, fmt: str, page: dict) -> Result:
         t0 = time.monotonic()
         if raw:
             # "The page as it looks" is a visual artefact; EPUB reflows text and
             # has no way to express it, so /raw is always a PDF.
-            _, _, pdf, _ = await self._engine_browser(url, raw=True)
+            _, _, pdf, _ = await self._engine_browser(url, raw=True, page_profile=page)
             if not pdf:
                 raise RenderError("no se pudo imprimir la página")
-            return Result(pdf, _host(url), "raw", 0, url, "pdf")
+            return Result(pdf, _host(url), "raw", 0, url, "pdf", page["name"])
 
         candidates: list[tuple[str, dict]] = []
         blocked: list[tuple[str, str]] = []
@@ -693,11 +703,13 @@ class Renderer:
         if fmt == "epub":
             blob = await self._build_epub(art, fields)
         else:
-            blob = await self._print_doc(build_page(**fields), url)
-        log.info("rendered %s via %s: %d chars, %s %d KB, %.1fs",
-                 _host(url), engine, art["chars"], fmt, len(blob) // 1024,
+            blob = await self._print_doc(build_page(**fields, page=page), url, page)
+        log.info("rendered %s via %s: %d chars, %s%s %d KB, %.1fs",
+                 _host(url), engine, art["chars"], fmt,
+                 f" {page['name']}" if fmt == "pdf" else "", len(blob) // 1024,
                  time.monotonic() - t0)
-        return Result(blob, title, engine, art["chars"], url, fmt)
+        return Result(blob, title, engine, art["chars"], url, fmt,
+                      page["name"] if fmt == "pdf" else "")
 
     # --- EPUB -------------------------------------------------------------
     async def _build_epub(self, art: dict, fields: dict) -> bytes:
@@ -882,7 +894,7 @@ class Renderer:
         finally:
             await page.close()
 
-    async def _print_doc(self, doc_html: str, url: str) -> bytes:
+    async def _print_doc(self, doc_html: str, url: str, page_profile: dict = PAGE) -> bytes:
         page = await self._ctx.new_page()
         try:
             # Image CDNs frequently 403 a request with no Referer.
@@ -900,7 +912,7 @@ class Renderer:
                 pass
             await page.emulate_media(media="print")
             cdp = await self._ctx.new_cdp_session(page)
-            res = await cdp.send("Page.printToPDF", PDF_OPTS)
+            res = await cdp.send("Page.printToPDF", pdf_opts(page_profile))
             return base64.b64decode(res["data"])
         finally:
             await page.close()

@@ -60,10 +60,81 @@ RESTART_AFTER_JOBS = int(_env("RESTART_AFTER_JOBS", default="25"))
 TRY_ARCHIVE_FALLBACK = _env("TRY_ARCHIVE_FALLBACK", default="1") == "1"
 DEBUG_RETENTION_DAYS = int(_env("DEBUG_RETENTION_DAYS", default="7"))
 
+# --- PDF page -------------------------------------------------------------
+# Chromium's printToPDF measures paper in inches and lays the page out at 96
+# CSS px per inch, so a 375/96 x 812/96 in page *is* the iPhone 13 mini
+# viewport (375x812 pt): one PDF page equals exactly one screenful, with
+# nothing to pinch-zoom. Paper sizes are the usual ones.
+PAGE_SIZES_IN: dict[str, tuple[float, float]] = {
+    "iphone": (375 / 96, 812 / 96),
+    "a4": (8.27, 11.69),
+    "a5": (5.83, 8.27),
+    "a6": (4.13, 5.83),
+    "letter": (8.5, 11.0),
+    "legal": (8.5, 14.0),
+}
+# Spellings that should resolve to a size: the env default shipped as
+# "iphone13mini", and Spanish names are what gets typed at the bot.
+PAGE_ALIASES = {
+    "iphone13mini": "iphone", "iphone13": "iphone", "phone": "iphone",
+    "movil": "iphone", "móvil": "iphone", "celular": "iphone", "tel": "iphone",
+    "carta": "letter", "oficio": "legal", "din-a4": "a4",
+}
+
+MM_PER_IN = 25.4
+# Typography is interpolated between two hand-tuned ends — the phone page
+# (99mm wide, 11pt type, ragged right) and A4 (210mm, 12pt, justified) — so a
+# new size lands on metrics consistent with both instead of needing its own
+# table. Anything outside that span is clamped rather than extrapolated: type
+# does not keep shrinking sensibly below a phone screen.
+_NARROW_MM, _WIDE_MM = 375 / 96 * MM_PER_IN, 210.0
+
+
+def _lerp(width_mm: float, narrow: float, wide: float) -> float:
+    t = (min(max(width_mm, _NARROW_MM), _WIDE_MM) - _NARROW_MM) / (_WIDE_MM - _NARROW_MM)
+    return narrow + (wide - narrow) * t
+
+
+def page_profile(name: str) -> dict:
+    """Geometry + type scale for one page size. Unknown names raise KeyError."""
+    key = PAGE_ALIASES.get(name.strip().lower(), name.strip().lower())
+    width_in, height_in = PAGE_SIZES_IN[key]
+    w = width_in * MM_PER_IN
+    side = _lerp(w, 5.0, 16.0)
+    return {
+        "name": key,
+        "width_in": width_in,
+        "height_in": height_in,
+        "label": f"{w:.0f}×{height_in * MM_PER_IN:.0f} mm",
+        "margin": f"{side * 1.15:.1f}mm {side:.1f}mm {side:.1f}mm",
+        "body_font": f"{_lerp(w, 11.0, 12.0):.1f}pt/{_lerp(w, 1.55, 1.62):.2f}",
+        "title_font": f"{_lerp(w, 17.0, 21.0):.1f}pt",
+        "h2_font": f"{_lerp(w, 12.5, 13.0):.1f}pt",
+        "h3_font": f"{_lerp(w, 11.0, 11.5):.1f}pt",
+        # Justification tears holes in a ~45-character line, so the narrow
+        # pages stay ragged right.
+        "text_align": "justify" if w >= 140 else "left",
+        # Capped as a fraction of the page height so one tall photo can't
+        # leave a mostly-blank page, whatever the paper.
+        "image_max_height": f"{height_in * MM_PER_IN * _lerp(w, 0.46, 0.39):.0f}mm",
+    }
+
+
+PAGE_NAMES = list(PAGE_SIZES_IN)
+# Default for a request that names no size.
+PDF_PAGE = PAGE_ALIASES.get(_env("PDF_PAGE", default="iphone").lower(),
+                            _env("PDF_PAGE", default="iphone").lower())
+if PDF_PAGE not in PAGE_SIZES_IN:
+    PDF_PAGE = "iphone"
+PAGE = page_profile(PDF_PAGE)
+
+# --- Output ---------------------------------------------------------------
+# Default output for a bare link. PDF pages are cut to the phone screen (see
+# PDF_PAGES), which is how these get read; EPUB stays reachable per-request
+# with /epub.
+DEFAULT_FORMAT = _env("DEFAULT_FORMAT", default="pdf")
+
 # --- EPUB -----------------------------------------------------------------
-# Default output. PDF stays reachable per-request (/pdf, and /raw which has no
-# EPUB equivalent since it reproduces the page visually).
-DEFAULT_FORMAT = _env("DEFAULT_FORMAT", default="epub")
 # Photos are re-encoded down to this width: e-readers gain nothing from a
 # 3000px original, and it keeps the book small enough to send over Telegram.
 EPUB_IMAGE_MAX_WIDTH = int(_env("EPUB_IMAGE_MAX_WIDTH", default="1200"))

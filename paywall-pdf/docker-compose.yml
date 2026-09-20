@@ -12,6 +12,11 @@ services:
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID:-}
       - TZ=${TZ:-America/Montevideo}
       - LOCALE=${PAYWALL_LOCALE:-es-UY}
+      # Default PDF paper: iphone (13 mini screen), a4, a5, a6, letter, legal.
+      # Any request can override it: /pdf a4 <link>
+      - PDF_PAGE=${PAYWALL_PDF_PAGE:-iphone}
+      # Output for a bare link: 'pdf' (phone-sized) or 'epub'
+      - DEFAULT_FORMAT=${PAYWALL_DEFAULT_FORMAT:-pdf}
     volumes:
       # Chrome profile: keeps extension state and any site logins across restarts
       - /srv/data/paywall-pdf/profile:/data/profile

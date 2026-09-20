@@ -1,63 +1,72 @@
 """Printable HTML wrapper for extracted articles."""
 import html
 
-PAGE_CSS = """
-@page { size: A4; margin: 18mm 16mm 16mm 16mm; }
-* { box-sizing: border-box; }
-html { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-body {
-  font: 12pt/1.62 Georgia, "Times New Roman", serif;
+from config import PAGE
+
+# The page geometry comes from a profile in config (phone-sized by default,
+# or whatever size the request named); the type scales with it, since a
+# 99mm-wide column cannot carry A4 headings.
+
+
+def page_css(page: dict = PAGE) -> str:
+    return f"""
+@page {{ size: {page["width_in"]:.5f}in {page["height_in"]:.5f}in; margin: {page["margin"]}; }}
+* {{ box-sizing: border-box; }}
+html {{ -webkit-print-color-adjust: exact; print-color-adjust: exact; }}
+body {{
+  font: {page["body_font"]} Georgia, "Times New Roman", serif;
   color: #1a1a1a; margin: 0; background: #fff; hyphens: auto;
-}
-header.meta { border-bottom: 1.5pt solid #1a1a1a; padding-bottom: 8pt; margin-bottom: 16pt; }
-header.meta .site {
+}}
+header.meta {{ border-bottom: 1.5pt solid #1a1a1a; padding-bottom: 8pt; margin-bottom: 16pt; }}
+header.meta .site {{
   font: bold 8.5pt/1.3 -apple-system, "Helvetica Neue", Arial, sans-serif;
   letter-spacing: .11em; text-transform: uppercase; color: #8a6a3b;
-}
-h1.title { font-size: 21pt; line-height: 1.2; margin: 6pt 0 8pt; font-weight: 700; }
-header.meta .byline {
+}}
+h1.title {{ font-size: {page["title_font"]}; line-height: 1.2; margin: 6pt 0 8pt; font-weight: 700; }}
+header.meta .byline {{
   font: italic 10pt/1.4 Georgia, serif; color: #555;
-}
-p { margin: 0 0 10pt; orphans: 3; widows: 3; text-align: justify; }
-h2, h3, h4 {
-  font: bold 13pt/1.3 Georgia, serif; margin: 16pt 0 6pt;
+}}
+p {{ margin: 0 0 10pt; orphans: 3; widows: 3; text-align: {page["text_align"]}; }}
+h2, h3, h4 {{
+  font: bold {page["h2_font"]}/1.3 Georgia, serif; margin: 16pt 0 6pt;
   break-after: avoid; page-break-after: avoid;
-}
-h3 { font-size: 11.5pt; }
-figure { margin: 12pt 0; break-inside: avoid; page-break-inside: avoid; }
-img {
+}}
+h3 {{ font-size: {page["h3_font"]}; }}
+figure {{ margin: 12pt 0; break-inside: avoid; page-break-inside: avoid; }}
+img {{
   max-width: 100%; height: auto; display: block; margin: 0 auto;
   /* Cap height so one tall photo can't leave a mostly-blank page */
-  max-height: 115mm; object-fit: contain;
-}
-figcaption, .caption {
+  max-height: {page["image_max_height"]}; object-fit: contain;
+}}
+figcaption, .caption {{
   font: 8.5pt/1.4 -apple-system, Arial, sans-serif; color: #666;
   margin-top: 4pt; text-align: center;
-}
-blockquote {
+}}
+blockquote {{
   margin: 12pt 0 12pt 10pt; padding-left: 10pt;
   border-left: 2.5pt solid #d8cdbb; color: #444; font-style: italic;
-}
-ul, ol { margin: 0 0 10pt 16pt; padding: 0; }
-li { margin-bottom: 4pt; }
-pre, code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9.5pt; }
-pre { background: #f5f3ef; padding: 8pt; overflow-wrap: break-word; white-space: pre-wrap; }
-table { width: 100%; border-collapse: collapse; font-size: 9.5pt; margin: 12pt 0; }
-th, td { border: .5pt solid #ccc; padding: 4pt 6pt; text-align: left; }
-a { color: #1a1a1a; text-decoration: none; }
-hr { border: 0; border-top: .5pt solid #ddd; margin: 14pt 0; }
+}}
+ul, ol {{ margin: 0 0 10pt 16pt; padding: 0; }}
+li {{ margin-bottom: 4pt; }}
+pre, code {{ font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9.5pt; }}
+pre {{ background: #f5f3ef; padding: 8pt; overflow-wrap: break-word; white-space: pre-wrap; }}
+table {{ width: 100%; border-collapse: collapse; font-size: 9.5pt; margin: 12pt 0; }}
+th, td {{ border: .5pt solid #ccc; padding: 4pt 6pt; text-align: left; }}
+a {{ color: #1a1a1a; text-decoration: none; }}
+hr {{ border: 0; border-top: .5pt solid #ddd; margin: 14pt 0; }}
 /* Strip junk Readability sometimes keeps */
 iframe, video, audio, form, button, .newsletter, [class*="promo"],
-[class*="related"], [class*="subscribe"], [class*="paywall"] { display: none !important; }
-footer.source {
+[class*="related"], [class*="subscribe"], [class*="paywall"] {{ display: none !important; }}
+footer.source {{
   margin-top: 20pt; padding-top: 8pt; border-top: .5pt solid #ccc;
   font: 8pt/1.45 -apple-system, Arial, sans-serif; color: #777; word-break: break-all;
-}
+}}
 """
 
 
 def build(*, title: str, content_html: str, url: str, site: str = "",
-          byline: str = "", published: str = "", engine: str = "") -> str:
+          byline: str = "", published: str = "", engine: str = "",
+          page: dict = PAGE) -> str:
     """Wrap extracted article HTML in a self-contained printable document."""
     esc = html.escape
     sub = " · ".join(x for x in (byline.strip(), published.strip()) if x)
@@ -67,7 +76,7 @@ def build(*, title: str, content_html: str, url: str, site: str = "",
 <meta charset="utf-8">
 <base href="{esc(url, quote=True)}">
 <title>{esc(title)}</title>
-<style>{PAGE_CSS}</style>
+<style>{page_css(page)}</style>
 </head>
 <body>
 <header class="meta">
