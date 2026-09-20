@@ -18,7 +18,14 @@ services:
       -g "fruit:metadata = stream"
       -g "fruit:nfs_aces = no"
     volumes:
-      - /mnt/toshiba:/share
+      # Long form so propagation can be declared: the host mount is `shared`,
+      # so rslave makes the container follow remounts of the USB drive instead
+      # of holding a stale, empty mount layer. See CLAUDE.md storage note.
+      - type: bind
+        source: /mnt/toshiba
+        target: /share
+        bind:
+          propagation: rslave
     ports:
       - "139:139"
       - "445:445"

@@ -104,6 +104,7 @@ The `samba` service (`samba/docker-compose.yml`, image `dperson/samba`) exports 
 - **Identity mapping:** share runs with `force user = damian` and `force group = 1000`, so files created over SMB land on the host owned `damian:damian` (1000:1000) — consistent with the rest of the box. (dperson's `-u` group field is a **name**, not a gid; passing a gid creates a literal group named after the number and breaks `force group` resolution.)
 - **macOS connect:** Finder → ⌘K → `smb://192.168.0.100` → log in with the SMB user/password → mount share `toshiba`.
 - Ports 139 + 445 (TCP) are open in UFW. Inherits the Toshiba drive's mount fragility (Storage note ¹).
+- Like Emby, the `/mnt/toshiba` → `/share` bind is declared in long form with `propagation: rslave` (the host mount is `shared`), so the container **follows** host remounts. Without it the share silently serves an *empty* directory after the drive is remounted — the connection and login still succeed, so the only symptom is a share with no files. Keep the long-form `type: bind` block; the short `/mnt/toshiba:/share` string cannot express propagation.
 
 ## Project Structure
 
