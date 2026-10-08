@@ -1,5 +1,6 @@
 // OpenFIGI enrichment. Only security identifiers are sent (via /api/figi), never account data.
 import type { FigiInfo, Holding } from './types';
+import { AuthError } from './session';
 
 interface MappingJob {
   idType: string;
@@ -79,6 +80,7 @@ async function post(jobs: MappingJob[], attempt = 0): Promise<MappingResult[]> {
     await sleep(reset * 1000);
     return post(jobs, attempt + 1);
   }
+  if (res.status === 401) throw new AuthError();
   if (!res.ok) throw new Error(`OpenFIGI ${res.status}`);
   return res.json();
 }

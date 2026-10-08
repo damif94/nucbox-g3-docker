@@ -101,9 +101,19 @@ its README for the engine details).
 React app (`portfolio-dashboard/`, see its README) that turns the bank's four CSV
 exports into a portfolio dashboard, enriched with OpenFIGI. Served at
 `https://damianferencz.org/portfolio/` (subpath on NPM host 2, see Subpath Routing), behind
-basic auth enforced **inside the container** (`PORTFOLIO_USER` / `PORTFOLIO_PASSWORD` in `.env`, extra logins in
-`PORTFOLIO_EXTRA_USERS` as `user:password,user2:password2`).
+the app's own **sign-in screen** (`PORTFOLIO_USER` / `PORTFOLIO_PASSWORD` in `.env`, extra logins in
+`PORTFOLIO_EXTRA_USERS` as `user:password,user2:password2`; recreate the container after editing).
 An NPM Access List can't be used: it applies to the whole `damianferencz.org` host, not one subpath.
+
+- **Login = cookie sessions in nginx itself (njs, `deploy/njs/auth.js`)**, no app server.
+  `/api/login` sets a signed HttpOnly/Secure/SameSite=Strict cookie (`pd_session`, 30 days,
+  Path `/portfolio/`); `/api/data/*` and `/api/figi` check it via `auth_request`. The app
+  shell (HTML/JS) is public — it holds no account data. Removing a user from `.env` revokes
+  their sessions on the next recreate; deleting `/srv/data/portfolio-dashboard/.session-secret`
+  signs everyone out. Logins are rate-limited per `X-Real-IP` (6/min, burst 5).
+- The image's njs is **0.8.x**: no `for…of`, no destructuring in `auth.js` — it fails at
+  nginx startup (container restart-loops) rather than at build time. Check with
+  `docker run --rm -v $PWD/deploy/njs:/n nginx:1.27-alpine njs -c 'import a from "/n/auth.js"'`.
 
 - **The last uploaded CSV set is stored on the box** (deliberate reversal of the original
   browser-only design, so every login opens the dashboard without uploading). Uploading is
@@ -114,7 +124,7 @@ An NPM Access List can't be used: it applies to the whole `damianferencz.org` ho
   file names + save time), 25 MB cap, no DELETE. Shared by all logins.
 - The other server logic is nginx proxying `/api/figi` → OpenFIGI (CORS blocks direct
   browser calls). POST only, 16 KB body cap, rate-limited to OpenFIGI's anonymous quota.
-  The basic auth guards both this proxy and the stored account data.
+  The login guards both this proxy and the stored account data.
 - No host port and no UFW rule: joins `nginx_npm_network` and is reached only through NPM
   (`/portfolio/` location in host 2's `advanced_config` → `http://portfolio-dashboard:80/`).
 - Built with Vite `base: '/portfolio/'`; changing the subpath means changing it there too.
@@ -127,7 +137,7 @@ An NPM Access List can't be used: it applies to the whole `damianferencz.org` ho
 
 | Host path | Container path | Notes |
 |---|---|---|
-| `/srv/data/portfolio-dashboard` | `/data` | Stored CSV set. Owned by uid 101 (the image's `nginx` user, shows as `messagebus` on the host), mode 700 — set by `deploy/15-data-dir.sh` at every start. Upload temp dir `.tmp` lives here so the final rename is atomic. |
+| `/srv/data/portfolio-dashboard` | `/data` | Stored CSV set + `.session-secret` (login cookie key). Owned by uid 101 (the image's `nginx` user, shows as `messagebus` on the host), mode 700 — set by `deploy/15-data-dir.sh` at every start. Upload temp dir `.tmp` lives here so the final rename is atomic. |
 
 #### Samba (SMB) share of the Toshiba drive
 
@@ -169,7 +179,7 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 | agents | 8723 | running (multi-customer) |
 | ateneo-medico | — (via NPM) | running (subpath on `damianferencz.org/ateneo-medico`) |
 | paywall-pdf | — (outbound only) | running (Telegram bot: link → article PDF) |
-| portfolio-dashboard | — (via NPM) | running (subpath on `damianferencz.org/portfolio`, basic auth in-container) |
+| portfolio-dashboard | — (via NPM) | running (subpath on `damianferencz.org/portfolio`, own sign-in screen) |
 
 ## Environment Variables
 

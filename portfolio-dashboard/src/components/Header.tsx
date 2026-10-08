@@ -3,7 +3,17 @@ import { Term } from './Term';
 import { Logo } from './Logo';
 import type { Dataset } from '../lib/types';
 
-export function Header({ ds, onReset }: { ds?: Dataset; onReset?: () => void }) {
+export function Header({
+  ds,
+  user,
+  onReset,
+  onSignOut,
+}: {
+  ds?: Dataset;
+  user?: string;
+  onReset?: () => void;
+  onSignOut?: () => void;
+}) {
   const { t, fmt, lang, setLang, theme, setTheme } = useSettings();
   return (
     <header className="topbar">
@@ -31,6 +41,16 @@ export function Header({ ds, onReset }: { ds?: Dataset; onReset?: () => void }) 
             </button>
           ))}
         </div>
+        {user && onSignOut && (
+          <span className="user">
+            <span className="user-name" title={user}>
+              {user}
+            </span>
+            <button className="btn ghost" onClick={onSignOut}>
+              {t.signOut}
+            </button>
+          </span>
+        )}
         <button className="btn icon" aria-label={t.theme.toggle} title={theme === 'dark' ? t.theme.light : t.theme.dark} onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}>
           {theme === 'dark' ? (
             <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2" fill="none" stroke="currentColor" strokeWidth="1.6" /><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" /></svg>

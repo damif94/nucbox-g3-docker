@@ -8,8 +8,10 @@ RUN npm run build
 
 FROM nginx:1.27-alpine
 # nginx's entrypoint renders /etc/nginx/templates/*.template with envsubst into conf.d
+COPY deploy/nginx.conf /etc/nginx/nginx.conf
 COPY deploy/nginx.conf.template /etc/nginx/templates/default.conf.template
-COPY --chmod=755 deploy/10-htpasswd.sh /docker-entrypoint.d/10-htpasswd.sh
+COPY deploy/njs/ /etc/nginx/njs/
+COPY --chmod=755 deploy/10-users.sh /docker-entrypoint.d/10-users.sh
 COPY --chmod=755 deploy/15-data-dir.sh /docker-entrypoint.d/15-data-dir.sh
 COPY --from=build /app/dist /usr/share/nginx/html
 ENV OPENFIGI_API_KEY=""

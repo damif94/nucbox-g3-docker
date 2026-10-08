@@ -4,6 +4,13 @@
 # OpenFIGI's anonymous limit is 25 requests/min for the whole key/IP, so limit globally
 # (behind NPM every request comes from the proxy's IP anyway).
 limit_req_zone $server_name zone=figi:1m rate=20r/m;
+# Login attempts per client. NPM overwrites X-Real-IP with the real peer address, and
+# this container has no host port, so the header can't be spoofed from outside.
+limit_req_zone $http_x_real_ip zone=login:1m rate=6r/m;
+
+# Cookie sessions (deploy/njs/auth.js)
+js_path /etc/nginx/njs/;
+js_import auth from auth.js;
 
 server {
   listen 80;
@@ -14,19 +21,38 @@ server {
   add_header Referrer-Policy no-referrer always;
   add_header X-Frame-Options DENY always;
 
-  # Everything except the healthcheck sits behind basic auth (keeps the OpenFIGI proxy private).
-  # The file is written at startup by deploy/10-htpasswd.sh from PORTFOLIO_USER/PORTFOLIO_PASSWORD.
-  auth_basic "Portfolio";
-  auth_basic_user_file /etc/nginx/conf.d/htpasswd;
+  # The app shell is public (it holds no account data); everything under /api/ except
+  # login/session needs a session cookie, checked by auth_request against auth.check.
+  location = /_auth {
+    internal;
+    js_content auth.check;
+  }
+
+  location = /api/login {
+    limit_except POST { deny all; }
+    limit_req zone=login burst=5 nodelay;
+    limit_req_status 429;
+    client_max_body_size 4k;
+    js_content auth.login;
+  }
+
+  location = /api/logout {
+    limit_except POST { deny all; }
+    js_content auth.logout;
+  }
+
+  location = /api/session {
+    js_content auth.session;
+  }
 
   location = /healthz {
-    auth_basic off;
     access_log off;
     return 200 'ok';
   }
 
   # Thin proxy to OpenFIGI: only security identifiers ever pass through here.
   location = /api/figi {
+    auth_request /_auth;
     limit_except POST { deny all; }
     limit_req zone=figi burst=10 nodelay;
     limit_req_status 429;
@@ -40,7 +66,7 @@ server {
     proxy_set_header Content-Type application/json;
     # an empty value means the header is not sent (anonymous tier)
     proxy_set_header X-OPENFIGI-APIKEY "${OPENFIGI_API_KEY}";
-    proxy_set_header Cookie "";
+    proxy_set_header Cookie "";  # the session cookie never leaves the box
     proxy_set_header Authorization "";
     proxy_hide_header Set-Cookie;
     add_header Cache-Control no-store always;
@@ -50,6 +76,7 @@ server {
   # names can be read or written. WebDAV PUT writes to a temp file on the same volume and
   # renames it into place, so a reader never sees a half-written file.
   location ~ ^/api/data/((accounts|positions|assets|activity)\.csv|meta\.json)$ {
+    auth_request /_auth;
     limit_except GET PUT { deny all; }
     alias /data/$1;
     dav_methods PUT;

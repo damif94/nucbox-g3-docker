@@ -5,8 +5,10 @@ import type { ParsedExport } from './lib/csv';
 import { normalize } from './lib/normalize';
 import { loadStored, saveStored, type ExportSet, type Stored } from './lib/store';
 import { enrichWithFigi } from './lib/figi';
+import { AuthError, getSession, logout } from './lib/session';
 import { Header } from './components/Header';
 import { Upload } from './components/Upload';
+import { Login } from './components/Login';
 import { Alerts, Kpis } from './components/Overview';
 import { ValueChart } from './components/ValueChart';
 import { ChangeSummary } from './components/ChangeSummary';
@@ -32,6 +34,8 @@ function Dashboard() {
   const [booting, setBooting] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // undefined while the session is being checked, null when signed out
+  const [user, setUser] = useState<string | null | undefined>(undefined);
 
   const show = useCallback((d: Dataset) => {
     enriched.current = null;
@@ -41,19 +45,42 @@ function Dashboard() {
     setUploading(false);
   }, []);
 
-  useEffect(() => {
-    let live = true;
-    loadStored()
-      .then((s) => {
-        if (!live || !s) return;
+  // Drops everything loaded for the previous session, back to the sign-in screen.
+  const signedOut = useCallback(() => {
+    enriched.current = null;
+    setDs(null);
+    setStored(null);
+    setOpen(null);
+    setFigiState('idle');
+    setUploading(false);
+    setNotice(null);
+    setBooting(false);
+    setUser(null);
+  }, []);
+
+  const loadData = useCallback(async () => {
+    setBooting(true);
+    try {
+      const s = await loadStored();
+      if (s) {
         setStored(s);
         show(build(s.files));
+      }
+    } catch (e) {
+      if (e instanceof AuthError) return signedOut();
+      setNotice(t.errLoadStored(String((e as Error).message)));
+    }
+    setBooting(false);
+  }, [show, signedOut, t]);
+
+  useEffect(() => {
+    getSession()
+      .then((u) => {
+        setUser(u);
+        if (u) loadData();
+        else setBooting(false);
       })
-      .catch((e) => live && setNotice(t.errLoadStored(String((e as Error).message))))
-      .finally(() => live && setBooting(false));
-    return () => {
-      live = false;
-    };
+      .catch(() => signedOut());
   }, []); // once, at startup
 
   // Builds the dashboard right away; the server copy is written in the background.
@@ -69,11 +96,16 @@ function Dashboard() {
       show(d);
       saveStored(all, changed)
         .then(setStored)
-        .catch((e) => setNotice(t.errSave(String((e as Error).message))));
+        .catch((e) => (e instanceof AuthError ? signedOut() : setNotice(t.errSave(String((e as Error).message)))));
       return null;
     },
-    [show, t],
+    [show, signedOut, t],
   );
+
+  const signOut = useCallback(async () => {
+    await logout();
+    signedOut();
+  }, [signedOut]);
 
   const enrich = useCallback(async (base: Dataset) => {
     setFigiState('loading');
@@ -81,10 +113,11 @@ function Dashboard() {
       const m = await enrichWithFigi(base.holdings);
       setDs((cur) => (cur && cur.asOf === base.asOf ? { ...cur, holdings: cur.holdings.map((h) => ({ ...h, figi: m.get(h.key) ?? null })) } : cur));
       setFigiState('done');
-    } catch {
-      setFigiState('error');
+    } catch (e) {
+      if (e instanceof AuthError) signedOut();
+      else setFigiState('error');
     }
-  }, []);
+  }, [signedOut]);
 
   useEffect(() => {
     if (ds && figiState === 'idle' && enriched.current?.asOf !== ds.asOf) {
@@ -93,7 +126,20 @@ function Dashboard() {
     }
   }, [ds, figiState, enrich]);
 
-  if (booting) {
+  if (user === null) {
+    return (
+      <>
+        <Header />
+        <Login
+          onSignedIn={(u) => {
+            setUser(u);
+            loadData();
+          }}
+        />
+      </>
+    );
+  }
+  if (user === undefined || booting) {
     return (
       <>
         <Header />
@@ -106,7 +152,7 @@ function Dashboard() {
   if (!ds || uploading) {
     return (
       <>
-        <Header />
+        <Header user={user} onSignOut={signOut} />
         <Upload
           stored={stored?.files ?? null}
           notice={notice}
@@ -119,7 +165,7 @@ function Dashboard() {
   const holding = open ? ds.holdings.find((h) => h.key === open) : null;
   return (
     <>
-      <Header ds={ds} onReset={() => setUploading(true)} />
+      <Header ds={ds} user={user} onSignOut={signOut} onReset={() => setUploading(true)} />
       <main className="dash">
         {notice && <p className="status-note" role="status">{notice}</p>}
         <Kpis ds={ds} />

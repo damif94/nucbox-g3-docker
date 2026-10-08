@@ -1,7 +1,8 @@
-// The last uploaded CSV set, stored on the server (nginx WebDAV, behind basic auth) and
+// The last uploaded CSV set, stored on the server (nginx WebDAV, behind the login) and
 // shared by every login, so the dashboard opens without uploading anything.
 import { parseText, type ParsedExport } from './csv';
 import type { ExportKind } from './types';
+import { AuthError } from './session';
 
 export const KINDS: ExportKind[] = ['accounts', 'positions', 'assets', 'activity'];
 
@@ -21,6 +22,7 @@ const BASE = `${import.meta.env.BASE_URL}api/data/`;
 
 async function get(name: string): Promise<Response> {
   const res = await fetch(BASE + name, { cache: 'no-store' });
+  if (res.status === 401) throw new AuthError();
   if (!res.ok && res.status !== 404) throw new Error(`${name}: HTTP ${res.status}`);
   return res;
 }
@@ -44,6 +46,7 @@ export async function loadStored(): Promise<Stored | null> {
 
 async function put(name: string, body: string, type: string) {
   const res = await fetch(BASE + name, { method: 'PUT', headers: { 'Content-Type': type }, body });
+  if (res.status === 401) throw new AuthError();
   if (!res.ok) throw new Error(`${name}: HTTP ${res.status}`);
 }
 
