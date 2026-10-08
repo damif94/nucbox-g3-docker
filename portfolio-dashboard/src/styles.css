@@ -786,6 +786,9 @@ table.uploads tr.superseded td {
   align-items: flex-end;
   gap: 8px 10px;
 }
+.act-range {
+  margin: 0 0 8px;
+}
 .period-note {
   text-align: right;
   margin: -4px 0 12px;

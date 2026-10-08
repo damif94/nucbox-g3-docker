@@ -101,6 +101,7 @@ const es = {
   secFixedIncome: 'Renta fija',
   secEvents: 'Próximos eventos',
   secActivity: 'Movimientos',
+  actRange: (a: string, b: string, n: number) => `${n} ${n === 1 ? 'movimiento' : 'movimientos'} posteriores al ${a} y hasta el ${b} (el período elegido arriba).`,
   secAccounts: 'Cuentas',
   secAttention: 'Puntos de atención',
   // kpis
@@ -425,6 +426,7 @@ const en: Strings = {
   secFixedIncome: 'Fixed income',
   secEvents: 'Upcoming events',
   secActivity: 'Activity',
+  actRange: (a, b, n) => `${n} ${n === 1 ? 'transaction' : 'transactions'} after ${a} through ${b} (the period selected above).`,
   secAccounts: 'Accounts',
   secAttention: 'Points of attention',
   kTotal: 'Total value',

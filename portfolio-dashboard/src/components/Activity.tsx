@@ -6,11 +6,16 @@ import { Term } from './Term';
 
 type Filter = 'all' | 'cash' | 'securities';
 
+/**
+ * The ledger for the selected period: same window as "change this period" (after the
+ * starting snapshot, up to and including the last), so its flows add up to that panel.
+ */
 export function Activity({ ds }: { ds: Dataset }) {
   const { t, fmt } = useSettings();
   const [filter, setFilter] = useState<Filter>('all');
   const [showContra, setShowContra] = useState(false);
-  const rows = ds.activity.filter(
+  const inPeriod = ds.activity.filter((x) => x.businessDate > ds.first && x.businessDate <= ds.asOf);
+  const rows = inPeriod.filter(
     (x) => (showContra || x.kind !== 'contra') && (filter === 'all' || (filter === 'cash' ? x.banking || x.kind === 'dividend' : !x.banking)),
   );
   const detail = (x: Txn) => {
@@ -38,6 +43,7 @@ export function Activity({ ds }: { ds: Dataset }) {
         </div>
       }
     >
+      <p className="muted small act-range">{t.actRange(fmt.date(ds.first), fmt.date(ds.asOf), rows.length)}</p>
       <div className="table-wrap">
         <table className="activity">
           <thead>

@@ -268,7 +268,7 @@ function Dashboard() {
           <Holdings ds={ds} figiState={figiState} onOpen={setOpen} onRetry={() => enrich(ds)} />
           <FixedIncome ds={ds} />
           <Events ds={ds} onOpen={setOpen} />
-          <Activity ds={ds} />
+          <Activity ds={view} />
           <Accounts ds={ds} />
         </div>
         <footer className="foot">
