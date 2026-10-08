@@ -1,0 +1,8 @@
+node_modules
+dist
+.vercel
+.env*
+!.env.example
+# never commit bank exports
+*.csv
+*.tsbuildinfo

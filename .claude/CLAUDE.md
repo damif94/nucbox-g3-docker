@@ -96,6 +96,59 @@ its README for the engine details).
   clears its lock at startup. When testing while the bot is up, always pass
   `-e PROFILE_DIR=/tmp/testprofile`.
 
+#### portfolio-dashboard (bank CSV → portfolio dashboard)
+
+React app (`portfolio-dashboard/`, see its README) that turns the bank's four CSV
+exports into a portfolio dashboard, enriched with OpenFIGI. Served at
+`https://damianferencz.org/portfolio/` (subpath on NPM host 2, see Subpath Routing), behind
+the app's own **sign-in screen** (`PORTFOLIO_USER` / `PORTFOLIO_PASSWORD` in `.env`, extra logins in
+`PORTFOLIO_EXTRA_USERS` as `user:password,user2:password2`; recreate the container after editing).
+An NPM Access List can't be used: it applies to the whole `damianferencz.org` host, not one subpath.
+
+- **Login = cookie sessions in nginx itself (njs, `deploy/njs/auth.js`)**, no app server.
+  `/api/login` sets a signed HttpOnly/Secure/SameSite=Strict cookie (`pd_session`, 30 days,
+  Path `/portfolio/`); `/api/library/*` and `/api/figi` check it via `auth_request`. The app
+  shell (HTML/JS) is public — it holds no account data. Removing a user from `.env` revokes
+  their sessions on the next recreate; deleting `/srv/data/portfolio-dashboard/.session-secret`
+  signs everyone out. Logins are rate-limited per `X-Real-IP` (6/min, burst 5).
+- The image's njs is **0.8.x**: no `for…of`, no destructuring in `auth.js`.
+- **nginx config errors only show at container start** (the container restart-loops and the
+  site is down). Before every deploy, build and test the config:
+  `docker build -q -t portfolio-dashboard:local . && docker run --rm -e PORTFOLIO_PASSWORD=x --tmpfs /data --entrypoint sh portfolio-dashboard:local -c '/docker-entrypoint.sh nginx -t'`.
+  Regex locations containing `{n}` must be quoted.
+
+- **Every uploaded export is kept on the box, as exported** (an upload *library*, so
+  historic data can be added in any order). The browser merges them on load
+  (`src/lib/merge.ts`): for Positions/Securities/Accounts each day comes from the most
+  recently *exported* file that has it (the `_YYYYMMDD_HHMM_` stamp in the file name), never
+  a mix; Activity rows are matched whole across files (its `Tradeid` is **not** unique).
+  Only Positions is required — Accounts falls back to the account fields in Positions.
+- **Coverage** (`src/lib/coverage.ts`): snapshot kinds are covered/missing per business day
+  (U.S. Fed holidays are "closed", `src/lib/calendar.ts`). Activity only has rows on days
+  something happened, so it is **verified against Positions** instead: between two
+  snapshots, each account's cash change must equal the Activity cash in between, and every
+  security quantity change needs an Activity row. The Data screen shows the timeline, what
+  is unexplained (account + amount) and what to export next.
+- Storage is plain nginx WebDAV, no app server: `GET /api/library/` (autoindex JSON),
+  `GET`/`PUT`/`DELETE` on `/api/library/<uuid>.(csv|json)` only. The `.json` sidecar (kind,
+  file name, uploader, sha256, CIF) is written last and deleted first. Shared by all logins.
+- The other server logic is nginx proxying `/api/figi` → OpenFIGI (CORS blocks direct
+  browser calls). POST only, 16 KB body cap, rate-limited to OpenFIGI's anonymous quota.
+  The login guards both this proxy and the stored account data.
+- No host port and no UFW rule: joins `nginx_npm_network` and is reached only through NPM
+  (`/portfolio/` location in host 2's `advanced_config` → `http://portfolio-dashboard:80/`).
+- Built with Vite `base: '/portfolio/'`; changing the subpath means changing it there too.
+- Uses OpenFIGI's anonymous tier (`OPENFIGI_API_KEY` left empty).
+- Locally built image (`portfolio-dashboard:local`), so it carries
+  `com.centurylinklabs.watchtower.enable=false`. Rebuild after `git pull` with
+  `docker compose --env-file ../.env up -d --build`.
+- Runs `read_only` with tmpfs for `/var/cache/nginx`, `/var/run`, `/etc/nginx/conf.d`
+  (the nginx entrypoint renders `deploy/nginx.conf.template` into `conf.d` at start).
+
+| Host path | Container path | Notes |
+|---|---|---|
+| `/srv/data/portfolio-dashboard` | `/data` | `library/` (every upload) + `.session-secret` (login cookie key); `.legacy/` holds the pre-library single set (2026-10-08), safe to delete. Owned by uid 101 (the image's `nginx` user, shows as `messagebus` on the host), mode 700 — set by `deploy/15-data-dir.sh` at every start. Upload temp dir `.tmp` lives here so the final rename is atomic. |
+
 #### Samba (SMB) share of the Toshiba drive
 
 The `samba` service (`samba/docker-compose.yml`, image `dperson/samba`) exports the whole Toshiba drive root (`/mnt/toshiba`) as a read-write SMB share named **`toshiba`**, so it can be mounted on a desktop and used with native drag-and-drop.
@@ -136,6 +189,7 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 | agents | 8723 | running (multi-customer) |
 | ateneo-medico | — (via NPM) | running (subpath on `damianferencz.org/ateneo-medico`) |
 | paywall-pdf | — (outbound only) | running (Telegram bot: link → article PDF) |
+| portfolio-dashboard | — (via NPM) | running (subpath on `damianferencz.org/portfolio`, own sign-in screen) |
 
 ## Environment Variables
 
@@ -180,6 +234,7 @@ Some services are routed as subpaths on `damianferencz.org` rather than their ow
 | Subpath | Container upstream | Notes |
 |---|---|---|
 | `/ateneo-medico/` | `ateneo-medico:8000` | FastAPI app; `ROOT_PATH=/ateneo-medico` for URL generation. Joins `nginx_npm_network`. |
+| `/portfolio/` | `portfolio-dashboard:80` | Static React app built with `base: '/portfolio/'`; `location = /portfolio` 301s to the slash form. |
 
 > The trailing slash on `proxy_pass` is critical — it strips the `/ateneo-medico/` prefix so the backend receives clean paths (e.g. `/login`, `/messages`).
 

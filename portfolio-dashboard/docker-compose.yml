@@ -1,0 +1,35 @@
+services:
+  portfolio-dashboard:
+    build: .
+    image: portfolio-dashboard:local
+    container_name: portfolio-dashboard
+    restart: unless-stopped
+    environment:
+      - TZ=${TZ:-America/Montevideo}
+      # Optional: raises OpenFIGI limits (10 -> 100 jobs/request). Empty = anonymous tier.
+      - OPENFIGI_API_KEY=${OPENFIGI_API_KEY:-}
+      # Logins for damianferencz.org/portfolio/ (required; the container won't start without it)
+      - PORTFOLIO_USER=${PORTFOLIO_USER:-damian}
+      - PORTFOLIO_PASSWORD=${PORTFOLIO_PASSWORD:?set PORTFOLIO_PASSWORD in .env}
+      # Optional extra logins: user:password,user2:password2
+      - PORTFOLIO_EXTRA_USERS=${PORTFOLIO_EXTRA_USERS:-}
+    volumes:
+      # the last uploaded CSV set; the entrypoint hands it to the nginx user
+      - /srv/data/portfolio-dashboard:/data
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /etc/nginx/conf.d
+    mem_limit: 64m
+    labels:
+      # Locally built image, nothing for watchtower to pull
+      - com.centurylinklabs.watchtower.enable=false
+    # No host port / no UFW rule: reached only through Nginx Proxy Manager
+    networks:
+      - npm_network
+
+networks:
+  npm_network:
+    external: true
+    name: nginx_npm_network
