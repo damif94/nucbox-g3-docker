@@ -780,6 +780,34 @@ table.uploads td.f {
 table.uploads tr.superseded td {
   color: var(--ink-3);
 }
+.range-pick {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 10px;
+  margin-bottom: 12px;
+}
+.range-pick label {
+  display: grid;
+  gap: 3px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+.range-pick input {
+  padding: 5px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+.range-pick input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
 .period-bar {
   display: flex;
   align-items: center;

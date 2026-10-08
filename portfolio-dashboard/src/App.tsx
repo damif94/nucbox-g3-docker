@@ -235,7 +235,7 @@ function Dashboard() {
         <Alerts ds={ds} />
         <div className="grid">
           <ValueChart ds={view} />
-          <ChangeSummary ds={view} cov={lib?.cov ?? null} />
+          <ChangeSummary full={ds} from={view.first} to={view.asOf} cov={lib?.cov ?? null} />
           <Allocation ds={ds} />
           <Issuers ds={ds} />
           <Countries ds={ds} />

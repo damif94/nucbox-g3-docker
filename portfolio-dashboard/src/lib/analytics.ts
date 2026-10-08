@@ -78,6 +78,21 @@ export function periodView(ds: Dataset, p: Period): Dataset {
   return history.length < 2 ? ds : { ...ds, history, first: history[0].date };
 }
 
+/**
+ * The dataset between two dates, for "change this period". Each end snaps to the last
+ * Positions snapshot on/before it (the start falls forward to the first snapshot when it is
+ * earlier than all of them), so both ends are real portfolio values. null when the range
+ * holds fewer than two snapshots.
+ */
+export function rangeView(ds: Dataset, from: string, to: string): Dataset | null {
+  const h = ds.history;
+  const i = Math.max(0, h.findLastIndex((d) => d.date <= from));
+  const j = h.findLastIndex((d) => d.date <= to);
+  if (j <= i) return null;
+  const history = h.slice(i, j + 1);
+  return { ...ds, history, first: history[0].date, asOf: history.at(-1)!.date };
+}
+
 export function changeBreakdown(ds: Dataset): ChangeBreakdown {
   const A = ds.activity.filter((t) => t.businessDate > ds.first && t.businessDate <= ds.asOf);
   const ext = A.filter((t) => t.external && t.cashEffect != null);
