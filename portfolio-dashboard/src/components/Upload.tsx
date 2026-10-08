@@ -1,40 +1,57 @@
 import { useRef, useState } from 'react';
 import { useSettings } from '../settings';
 import { parseExport, type ParsedExport } from '../lib/csv';
-import { normalize } from '../lib/normalize';
-import type { Dataset, ExportKind } from '../lib/types';
+import { KINDS, type ExportSet } from '../lib/store';
+import type { ExportKind } from '../lib/types';
 
-const KINDS: ExportKind[] = ['accounts', 'positions', 'assets', 'activity'];
-
-export function Upload({ onLoaded }: { onLoaded: (ds: Dataset) => void }) {
+/**
+ * Pre-filled with the stored set (when there is one): dropping files replaces just those
+ * kinds, and the rest fall back to what is already stored.
+ */
+export function Upload({
+  stored,
+  notice,
+  onOpen,
+  onBack,
+}: {
+  stored: ExportSet | null;
+  notice?: string | null;
+  onOpen: (all: ExportSet, changed: ExportKind[]) => string | null;
+  onBack?: () => void;
+}) {
   const { t } = useSettings();
-  const [files, setFiles] = useState<Partial<Record<ExportKind, ParsedExport>>>({});
+  const [files, setFiles] = useState<Partial<ExportSet>>(stored ?? {});
+  const [fresh, setFresh] = useState<ExportKind[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [over, setOver] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
+  const complete = (f: Partial<ExportSet>): f is ExportSet => KINDS.every((k) => f[k]);
+
+  function open(all: ExportSet, changed: ExportKind[]) {
+    const err = onOpen(all, changed);
+    if (err) setError(err);
+  }
+
   async function accept(list: FileList | null) {
     if (!list?.length) return;
     setError(null);
-    const next = { ...files };
+    const next: Partial<ExportSet> = { ...files };
+    const changed = new Set(fresh);
     for (const f of Array.from(list)) {
       try {
-        const p = await parseExport(f);
+        const p: ParsedExport = await parseExport(f);
         next[p.kind] = p;
+        changed.add(p.kind);
       } catch (e) {
         const msg = String((e as Error).message);
         setError(msg.startsWith('unrecognized:') ? t.upErrUnknown(f.name) : msg);
       }
     }
     setFiles(next);
-    const missing = KINDS.filter((k) => !next[k]);
-    if (missing.length === 0) {
-      try {
-        onLoaded(normalize(Object.values(next) as ParsedExport[]));
-      } catch (e) {
-        setError(String((e as Error).message));
-      }
-    }
+    setFresh([...changed]);
+    // first-ever upload: open as soon as the set is complete; otherwise wait for the button
+    if (!stored && complete(next)) open(next, [...changed]);
   }
 
   return (
@@ -42,8 +59,9 @@ export function Upload({ onLoaded }: { onLoaded: (ds: Dataset) => void }) {
       <div className="upload-copy">
         <p className="eyebrow">{t.appName}</p>
         <h1>{t.upTitle}</h1>
-        <p className="lead">{t.upLead}</p>
+        <p className="lead">{stored ? t.upLeadStored : t.upLead}</p>
       </div>
+      {notice && <p className="error" role="alert">{notice}</p>}
       <label
         className={`drop ${over ? 'is-over' : ''}`}
         onDragOver={(e) => {
@@ -68,7 +86,10 @@ export function Upload({ onLoaded }: { onLoaded: (ds: Dataset) => void }) {
           <li key={k} className={files[k] ? 'ok' : ''}>
             <span className="chk" aria-hidden="true">{files[k] ? '✓' : ''}</span>
             <span className="k">{t.upKinds[k]}</span>
-            <span className="f">{files[k]?.fileName ?? t.upWaiting}</span>
+            <span className="f">
+              {files[k]?.fileName ?? t.upWaiting}
+              {files[k] && !fresh.includes(k) && <em className="saved-tag">{t.upSaved}</em>}
+            </span>
           </li>
         ))}
       </ul>
@@ -76,6 +97,18 @@ export function Upload({ onLoaded }: { onLoaded: (ds: Dataset) => void }) {
         <p className="error" role="alert">
           {error.startsWith('missing:') ? t.upErrMissing(error.slice(8)) : error}
         </p>
+      )}
+      {stored && (
+        <div className="upload-actions">
+          <button className="btn primary" disabled={!fresh.length || !complete(files)} onClick={() => complete(files) && open(files, fresh)}>
+            {t.upOpen}
+          </button>
+          {onBack && (
+            <button className="btn ghost" onClick={onBack}>
+              {t.upBack}
+            </button>
+          )}
+        </div>
       )}
       <p className="fine">{t.upPrivacy}</p>
     </main>

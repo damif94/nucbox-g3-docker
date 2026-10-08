@@ -4,7 +4,10 @@ Dashboard for the Safra National Bank CSV exports (Accounts, Activity, Positions
 ES/EN, light/dark, plain-language tooltips on every financial term, instrument data enriched via OpenFIGI.
 
 ## Privacy model
-- CSVs are parsed **in the browser** (PapaParse). They are never uploaded or stored.
+- CSVs are parsed **in the browser** (PapaParse). The last uploaded set is also stored on the server
+  (`/srv/data/portfolio-dashboard`, via nginx WebDAV `PUT` on `/api/data/*`, behind basic auth) and shared
+  by every login, so the dashboard opens without uploading. Uploading new files is optional and can
+  replace any subset; kinds not re-uploaded fall back to the stored copies (`src/lib/store.ts`).
 - Only security identifiers (ISIN / option ticker) are sent to `/api/figi`, an nginx proxy to OpenFIGI
   (POST only, 16 KB body cap, rate-limited to OpenFIGI's anonymous quota).
 - FIGI lookups are cached in `localStorage` (identifiers only).

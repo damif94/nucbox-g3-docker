@@ -105,12 +105,16 @@ basic auth enforced **inside the container** (`PORTFOLIO_USER` / `PORTFOLIO_PASS
 `PORTFOLIO_EXTRA_USERS` as `user:password,user2:password2`).
 An NPM Access List can't be used: it applies to the whole `damianferencz.org` host, not one subpath.
 
-- **The CSVs never reach the box.** They are parsed in the browser and not stored;
-  the container only serves static files. Never add server-side upload/storage.
-- The only server logic is nginx proxying `/api/figi` → OpenFIGI (CORS blocks direct
-  browser calls, and it keeps `OPENFIGI_API_KEY` off the client). POST only, 16 KB
-  body cap, rate-limited to OpenFIGI's anonymous quota. The basic auth exists to keep
-  this proxy (and its quota) private.
+- **The last uploaded CSV set is stored on the box** (deliberate reversal of the original
+  browser-only design, so every login opens the dashboard without uploading). Uploading is
+  optional: "load other files" replaces only the kinds you drop, the rest fall back to the
+  stored copies. Parsing still happens in the browser.
+- Storage is plain nginx WebDAV, no app server: `GET`/`PUT` on exactly
+  `/api/data/{accounts,positions,assets,activity}.csv` and `/api/data/meta.json` (original
+  file names + save time), 25 MB cap, no DELETE. Shared by all logins.
+- The other server logic is nginx proxying `/api/figi` → OpenFIGI (CORS blocks direct
+  browser calls). POST only, 16 KB body cap, rate-limited to OpenFIGI's anonymous quota.
+  The basic auth guards both this proxy and the stored account data.
 - No host port and no UFW rule: joins `nginx_npm_network` and is reached only through NPM
   (`/portfolio/` location in host 2's `advanced_config` → `http://portfolio-dashboard:80/`).
 - Built with Vite `base: '/portfolio/'`; changing the subpath means changing it there too.
@@ -120,6 +124,10 @@ An NPM Access List can't be used: it applies to the whole `damianferencz.org` ho
   `docker compose --env-file ../.env up -d --build`.
 - Runs `read_only` with tmpfs for `/var/cache/nginx`, `/var/run`, `/etc/nginx/conf.d`
   (the nginx entrypoint renders `deploy/nginx.conf.template` into `conf.d` at start).
+
+| Host path | Container path | Notes |
+|---|---|---|
+| `/srv/data/portfolio-dashboard` | `/data` | Stored CSV set. Owned by uid 101 (the image's `nginx` user, shows as `messagebus` on the host), mode 700 — set by `deploy/15-data-dir.sh` at every start. Upload temp dir `.tmp` lives here so the final rename is atomic. |
 
 #### Samba (SMB) share of the Toshiba drive
 

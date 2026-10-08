@@ -46,6 +46,25 @@ server {
     add_header Cache-Control no-store always;
   }
 
+  # The last uploaded CSV set (see src/lib/store.ts), shared by every login. Only these five
+  # names can be read or written. WebDAV PUT writes to a temp file on the same volume and
+  # renames it into place, so a reader never sees a half-written file.
+  location ~ ^/api/data/((accounts|positions|assets|activity)\.csv|meta\.json)$ {
+    limit_except GET PUT { deny all; }
+    alias /data/$1;
+    dav_methods PUT;
+    dav_access user:rw;
+    client_max_body_size 25m;
+    client_body_temp_path /data/.tmp;
+    add_header Cache-Control no-store always;
+    add_header X-Content-Type-Options nosniff always;
+  }
+
+  # nothing else under /api/ (keeps it out of the SPA fallback)
+  location /api/ {
+    return 404;
+  }
+
   # hashed bundles never change
   location /assets/ {
     add_header Cache-Control "public, max-age=31536000, immutable";

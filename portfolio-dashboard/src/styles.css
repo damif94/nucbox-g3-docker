@@ -227,6 +227,18 @@ a {
 .btn.ghost {
   background: transparent;
 }
+.btn.primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+.btn.primary:hover {
+  background: color-mix(in srgb, var(--accent) 85%, var(--ink));
+}
+.btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
 .btn.icon {
   width: 34px;
   height: 34px;
@@ -399,6 +411,28 @@ a {
   text-overflow: ellipsis;
   white-space: nowrap;
   min-width: 0;
+}
+.saved-tag {
+  margin-left: 8px;
+  font-family: var(--font-body);
+  font-style: normal;
+  font-size: 11px;
+  color: var(--ink-3);
+}
+.upload-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.upload-actions .btn {
+  padding: 9px 16px;
+}
+.status-note {
+  margin: 0 0 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--warn-bg);
+  color: var(--warn);
 }
 .error {
   margin: 0;
