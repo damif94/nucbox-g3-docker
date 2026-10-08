@@ -186,11 +186,13 @@ a {
   gap: 6px 12px;
   min-width: 0;
 }
-.brand .mark {
-  width: 18px;
-  height: 18px;
-  border-radius: 4px;
-  background: linear-gradient(135deg, var(--accent) 50%, var(--series-3) 50%);
+.logo {
+  display: block;
+  flex: none;
+}
+.logo.hero {
+  margin-bottom: 18px;
+  filter: drop-shadow(0 6px 14px color-mix(in srgb, var(--accent) 30%, transparent));
 }
 .brand .name {
   font-family: var(--font-display);

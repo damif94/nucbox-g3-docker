@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useSettings } from '../settings';
 import { parseExport, type ParsedExport } from '../lib/csv';
 import { KINDS, type ExportSet } from '../lib/store';
+import { Logo } from './Logo';
 import type { ExportKind } from '../lib/types';
 
 /**
@@ -57,6 +58,7 @@ export function Upload({
   return (
     <main className="upload">
       <div className="upload-copy">
+        <Logo size={56} className="hero" />
         <p className="eyebrow">{t.appName}</p>
         <h1>{t.upTitle}</h1>
         <p className="lead">{stored ? t.upLeadStored : t.upLead}</p>

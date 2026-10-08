@@ -1,5 +1,6 @@
 import { useSettings } from '../settings';
 import { Term } from './Term';
+import { Logo } from './Logo';
 import type { Dataset } from '../lib/types';
 
 export function Header({ ds, onReset }: { ds?: Dataset; onReset?: () => void }) {
@@ -7,7 +8,7 @@ export function Header({ ds, onReset }: { ds?: Dataset; onReset?: () => void }) 
   return (
     <header className="topbar">
       <div className="brand">
-        <span className="mark" aria-hidden="true" />
+        <Logo size={26} />
         <span className="name">{t.appName}</span>
         {ds && (
           <span className="meta">
