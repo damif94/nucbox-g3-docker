@@ -183,8 +183,15 @@ function transferContra(desc: string, own: string): string | null {
   return m[1] === own ? m[2] : m[1];
 }
 
+/**
+ * A cash-ledger row (cash account or credit line). `Transaction Code` is filled on exactly
+ * those rows in every export seen; `IsBankingAcct` is not reliable — older exports have
+ * whole files with it "False" on cash rows, which hid deposits and transfers.
+ */
+const isBanking = (r: Row) => !!str(r['Transaction Code']) || r.IsBankingAcct?.toUpperCase() === 'TRUE';
+
 function classify(r: Row, tracked: Set<string>): Pick<Txn, 'kind' | 'external' | 'cashEffect' | 'code'> {
-  const banking = r.IsBankingAcct.toUpperCase() === 'TRUE';
+  const banking = isBanking(r);
   const desc = r.Description || r['Description BPS'];
   if (banking) {
     const code = str(r['Transaction Code']);
@@ -196,6 +203,17 @@ function classify(r: Row, tracked: Set<string>): Pick<Txn, 'kind' | 'external' |
       case '163':
         kind = isCredit ? 'deposit' : 'withdrawal';
         external = true;
+        break;
+      case '116': // incoming wire
+        kind = 'deposit';
+        external = true;
+        break;
+      case '183': // ACH debit to an outside brokerage (e.g. "MONEYLINK SCHWAB", "BROK.TRANS SAFRA SECURITIES")
+        kind = 'withdrawal';
+        external = true;
+        break;
+      case '169': // overdraft interest
+        kind = 'fee';
         break;
       case '114':
       case '113': {
@@ -235,7 +253,7 @@ function classify(r: Row, tracked: Set<string>): Pick<Txn, 'kind' | 'external' |
 function buildActivity(rows: Row[], tracked: Set<string>): Txn[] {
   return rows
     .map((r, i) => {
-      const banking = r.IsBankingAcct.toUpperCase() === 'TRUE';
+      const banking = isBanking(r);
       const c = classify(r, tracked);
       const tradeDate = str(r.Trade_Date);
       return {
