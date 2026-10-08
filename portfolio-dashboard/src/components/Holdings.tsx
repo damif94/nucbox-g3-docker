@@ -1,7 +1,7 @@
 import { Fragment } from 'react';
 import { useSettings } from '../settings';
 import type { Bucket, Dataset, Holding } from '../lib/types';
-import { unrealized } from '../lib/analytics';
+import { optionShares, unrealized } from '../lib/analytics';
 import { Delta, Panel, useHoldingName } from './ui';
 import { Term } from './Term';
 import { BUCKET_COLOR } from './Exposure';
@@ -16,8 +16,11 @@ export function Holdings({ ds, figiState, onOpen, onRetry }: { ds: Dataset; figi
 
   const sub = (h: Holding) => {
     if (h.option) {
+      // "covered" only makes sense for a sold call: the shares held are what would be delivered
+      const shares = optionShares(h);
       const und = ds.holdings.find((x) => x.bucket === 'equity' && x.ref.ticker === h.option!.underlying);
-      return und && und.quantity >= Math.abs(h.quantity) * 100 ? t.coveredBy(und.quantity, h.option.underlying) : h.description;
+      const covered = h.option.right === 'C' && h.quantity < 0 && shares !== null && und && und.quantity >= shares;
+      return covered ? t.coveredBy(und.quantity, h.option.underlying) : h.description;
     }
     if (h.bucket === 'cash') return `${h.account} · ${h.entity}`;
     return [h.isin, h.figi?.name ?? h.ref.issuer].filter(Boolean).join(' · ');

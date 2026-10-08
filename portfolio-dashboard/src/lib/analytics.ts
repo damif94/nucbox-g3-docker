@@ -213,12 +213,15 @@ export function alerts(ds: Dataset): Alert[] {
   for (const o of H.filter((h) => h.option)) {
     const und = H.find((h) => h.bucket === 'equity' && (h.ref.ticker ?? h.figi?.ticker) === o.option!.underlying);
     if (!und?.price) continue;
-    const itm = o.option!.right === 'C' ? und.price > o.option!.strike : und.price < o.option!.strike;
+    const call = o.option!.right === 'C';
+    const itm = call ? und.price > o.option!.strike : und.price < o.option!.strike;
+    // only sold options carry an obligation; a sold put means buying the shares, not selling
     if (itm && o.quantity < 0) {
       out.push({
-        id: 'shortCallItm',
+        id: call ? 'shortCallItm' : 'shortPutItm',
         severity: 'warning',
-        params: { und: o.option!.underlying, strike: o.option!.strike, px: und.price, expiry: o.option!.expiry, shares: Math.abs(o.quantity) * OPTION_SHARES },
+        // -1 = adjusted contract, deliverable unknown (params are plain numbers/strings)
+        params: { und: o.option!.underlying, strike: o.option!.strike, px: und.price, expiry: o.option!.expiry, shares: optionShares(o) ?? -1 },
       });
     }
   }
@@ -239,6 +242,16 @@ export function alerts(ds: Dataset): Alert[] {
 }
 
 const OPTION_SHARES = 100;
+
+/**
+ * Shares the position delivers at exercise, or null for a contract adjusted by a corporate
+ * action ("ADJ" in the description): its deliverable is no longer 100 shares per contract
+ * and the export doesn't say what it is.
+ */
+export function optionShares(h: Holding): number | null {
+  if (!h.option || h.option.adjusted) return null;
+  return Math.abs(h.quantity) * OPTION_SHARES;
+}
 
 /** Short human name: OpenFIGI ticker when known, else the bank description. */
 export function displayName(h: Holding): string {

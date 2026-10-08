@@ -52,7 +52,9 @@ export function Alerts({ ds }: { ds: Dataset }) {
     const p = a.params;
     switch (a.id) {
       case 'shortCallItm':
-        return t.alert.shortCallItm({ und: String(p.und), strike: fmt.usd(+p.strike, 2), px: fmt.usd(+p.px, 2), expiry: fmt.date(String(p.expiry), 'long'), shares: +p.shares });
+        return t.alert.shortCallItm({ und: String(p.und), strike: fmt.usd(+p.strike, 2), px: fmt.usd(+p.px, 2), expiry: fmt.date(String(p.expiry), 'long'), shares: +p.shares < 0 ? null : +p.shares });
+      case 'shortPutItm':
+        return t.alert.shortPutItm({ und: String(p.und), strike: fmt.usd(+p.strike, 2), px: fmt.usd(+p.px, 2), expiry: fmt.date(String(p.expiry), 'long'), shares: +p.shares < 0 ? null : +p.shares });
       case 'structuredConc':
         return t.alert.structuredConc({ pct: fmt.pct(+p.pct, 0) });
       case 'issuerConc':

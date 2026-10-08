@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useSettings } from '../settings';
 import type { Dataset, Holding } from '../lib/types';
-import { noteUnderlyings, parentIssuer, unrealized } from '../lib/analytics';
+import { noteUnderlyings, optionShares, parentIssuer, unrealized } from '../lib/analytics';
 import { figiUrl } from '../lib/figi';
 import { Delta, useHoldingName } from './ui';
 import { Term } from './Term';
@@ -57,7 +57,15 @@ export function HoldingDrawer({ ds, holding: h, onClose }: { ds: Dataset; holdin
         return t.what.etf({ name: h.figi?.name ?? h.ref.issuer ?? h.description, focus: t.focus[h.ref.fundFocus ?? ''] ?? h.ref.fundFocus ?? '' });
       case 'options':
         return h.option
-          ? t.what.option({ n: Math.abs(h.quantity), und: h.option.underlying, strike: fmt.usd(h.option.strike, 2), expiry: fmt.date(h.option.expiry, 'long'), shares: Math.abs(h.quantity) * 100 })
+          ? t.what.option({
+              n: Math.abs(h.quantity),
+              right: h.option.right,
+              sold: h.quantity < 0,
+              und: h.option.underlying,
+              strike: fmt.usd(h.option.strike, 2),
+              expiry: fmt.date(h.option.expiry, 'long'),
+              shares: optionShares(h),
+            })
           : h.description;
       case 'credit':
         return t.what.credit;

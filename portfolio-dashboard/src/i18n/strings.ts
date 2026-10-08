@@ -1,5 +1,12 @@
 export type Lang = 'es' | 'en';
 
+// null = contract adjusted by a corporate action: the deliverable isn't 100 shares per
+// contract and the export doesn't say what it is, so don't print a number
+const esShares = (n: number | null, und: string) =>
+  n === null ? `las acciones de ${und} que fije el contrato ajustado (confirma la cantidad con el banco)` : `${n} acciones`;
+const enShares = (n: number | null, und: string) =>
+  n === null ? `the ${und} shares set by the adjusted contract (confirm the amount with the bank)` : `${n} shares`;
+
 const es = {
   appName: 'Portfolio Ledger',
   asOf: 'Al cierre del',
@@ -238,16 +245,25 @@ const es = {
     cln: (p: { issuer: string; coupon: string; maturity: string; price: string }) =>
       `Nota de ${p.issuer} que paga ${p.coupon} anual mientras Brasil no incumpla su deuda. Si Brasil incumple, se pierde parte o todo el capital. Vence el ${p.maturity}; hoy vale ${p.price} del nominal.`,
     etf: (p: { name: string; focus: string }) => `Fondo cotizado (${p.name}) que sigue ${p.focus}. Se compra y vende como una acción.`,
-    option: (p: { n: number; und: string; strike: string; expiry: string; shares: number }) =>
-      `Vendiste ${p.n} ${p.n === 1 ? 'contrato' : 'contratos'} call sobre ${p.und}. Cobraste una prima; a cambio, si ${p.und} cierra sobre ${p.strike} el ${p.expiry}, te pueden comprar ${p.shares} acciones a ${p.strike}.`,
+    option: (p: { n: number; right: 'C' | 'P'; sold: boolean; und: string; strike: string; expiry: string; shares: number | null }) => {
+      const what = `${p.n} ${p.n === 1 ? 'contrato' : 'contratos'} ${p.right === 'C' ? 'call' : 'put'} sobre ${p.und}`;
+      const shares = esShares(p.shares, p.und);
+      if (p.sold)
+        return p.right === 'C'
+          ? `Vendiste ${what}. Cobraste una prima; a cambio, si ${p.und} cierra sobre ${p.strike} el ${p.expiry}, te pueden comprar ${shares} a ${p.strike}.`
+          : `Vendiste ${what}. Cobraste una prima; a cambio, si ${p.und} cierra bajo ${p.strike} el ${p.expiry}, te pueden obligar a comprar ${shares} a ${p.strike}.`;
+      return `Compraste ${what}: te da el derecho (no la obligación) de ${p.right === 'C' ? 'comprar' : 'vender'} ${shares} a ${p.strike} hasta el ${p.expiry}.`;
+    },
     cash: 'Saldo en efectivo, disponible inmediatamente.',
     credit: 'Línea de crédito disponible. Solo genera intereses si la usas.',
   },
   focus: { Commodity: 'el precio del oro', Equity: 'acciones del sector energético' } as Record<string, string>,
   // alerts
   alert: {
-    shortCallItm: (p: { und: string; strike: string; px: string; expiry: string; shares: number }) =>
-      `El call vendido sobre ${p.und} (ejercicio ${p.strike}) está dentro del dinero: ${p.und} cotiza a ${p.px}. Si sigue así al ${p.expiry}, probablemente debas vender ${p.shares} acciones a ${p.strike}.`,
+    shortCallItm: (p: { und: string; strike: string; px: string; expiry: string; shares: number | null }) =>
+      `El call vendido sobre ${p.und} (ejercicio ${p.strike}) está dentro del dinero: ${p.und} cotiza a ${p.px}. Si sigue así al ${p.expiry}, probablemente debas vender ${esShares(p.shares, p.und)} a ${p.strike}.`,
+    shortPutItm: (p: { und: string; strike: string; px: string; expiry: string; shares: number | null }) =>
+      `El put vendido sobre ${p.und} (ejercicio ${p.strike}) está dentro del dinero: ${p.und} cotiza a ${p.px}. Si sigue así al ${p.expiry}, probablemente debas comprar ${esShares(p.shares, p.und)} a ${p.strike}.`,
     structuredConc: (p: { pct: string }) => `Las notas estructuradas son ${p.pct} del portafolio. Su pago depende de condiciones de mercado y de la solvencia de los bancos emisores.`,
     issuerConc: (p: { issuer: string; pct: string }) => `${p.issuer} concentra ${p.pct} del portafolio como emisor.`,
     bondsBelowCost: (p: { n: number; amount: string; pct: string }) =>
@@ -493,15 +509,24 @@ const en: Strings = {
     cln: (p) =>
       `Note from ${p.issuer} paying ${p.coupon} a year as long as Brazil does not default on its debt. If Brazil defaults, part or all of the principal is lost. Matures ${p.maturity}; worth ${p.price} of face today.`,
     etf: (p) => `Exchange-traded fund (${p.name}) tracking ${p.focus}. Bought and sold like a stock.`,
-    option: (p) =>
-      `You sold ${p.n} call ${p.n === 1 ? 'contract' : 'contracts'} on ${p.und}. You collected a premium; in exchange, if ${p.und} closes above ${p.strike} on ${p.expiry}, ${p.shares} shares can be bought from you at ${p.strike}.`,
+    option: (p) => {
+      const what = `${p.n} ${p.right === 'C' ? 'call' : 'put'} ${p.n === 1 ? 'contract' : 'contracts'} on ${p.und}`;
+      const shares = enShares(p.shares, p.und);
+      if (p.sold)
+        return p.right === 'C'
+          ? `You sold ${what}. You collected a premium; in exchange, if ${p.und} closes above ${p.strike} on ${p.expiry}, ${shares} can be bought from you at ${p.strike}.`
+          : `You sold ${what}. You collected a premium; in exchange, if ${p.und} closes below ${p.strike} on ${p.expiry}, you can be made to buy ${shares} at ${p.strike}.`;
+      return `You bought ${what}: the right (not the obligation) to ${p.right === 'C' ? 'buy' : 'sell'} ${shares} at ${p.strike} until ${p.expiry}.`;
+    },
     cash: 'Cash balance, available immediately.',
     credit: 'Available credit line. It only accrues interest if you draw on it.',
   },
   focus: { Commodity: 'the price of gold', Equity: 'energy-sector stocks' },
   alert: {
     shortCallItm: (p) =>
-      `The call sold on ${p.und} (strike ${p.strike}) is in the money: ${p.und} trades at ${p.px}. If that holds on ${p.expiry}, you will likely have to sell ${p.shares} shares at ${p.strike}.`,
+      `The call sold on ${p.und} (strike ${p.strike}) is in the money: ${p.und} trades at ${p.px}. If that holds on ${p.expiry}, you will likely have to sell ${enShares(p.shares, p.und)} at ${p.strike}.`,
+    shortPutItm: (p) =>
+      `The put sold on ${p.und} (strike ${p.strike}) is in the money: ${p.und} trades at ${p.px}. If that holds on ${p.expiry}, you will likely have to buy ${enShares(p.shares, p.und)} at ${p.strike}.`,
     structuredConc: (p) => `Structured notes are ${p.pct} of the portfolio. Their payout depends on market conditions and on the issuing banks’ solvency.`,
     issuerConc: (p) => `${p.issuer} accounts for ${p.pct} of the portfolio as issuer.`,
     bondsBelowCost: (p) => `${p.n} bonds trade below cost (${p.amount}, ${p.pct}). It is not a loss unless sold or the issuer fails to pay.`,
