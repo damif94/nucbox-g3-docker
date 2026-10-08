@@ -1,6 +1,6 @@
 // Normalizes the four Safra NB CSV exports into one Dataset.
 // Field semantics: financial-companion repo, docs/formats/safra-csv-exports.md
-import type { Row, ParsedExport } from './csv';
+import type { Row } from './csv';
 import type { Account, Bucket, Dataset, DayValue, ExportKind, Holding, InstrumentRef, OptionTerms, Txn, TxnKind } from './types';
 
 const NULL_DATE = '1900-01-01';
@@ -260,14 +260,11 @@ function buildActivity(rows: Row[], tracked: Set<string>): Txn[] {
     .sort((a, b) => b.date.localeCompare(a.date) || b.id - a.id);
 }
 
-export function normalize(files: ParsedExport[]): Dataset {
-  const byKind = new Map<ExportKind, ParsedExport>();
-  for (const f of files) byKind.set(f.kind, f);
-  const missing = (['accounts', 'activity', 'positions', 'assets'] as ExportKind[]).filter((k) => !byKind.has(k));
-  if (missing.length) throw new Error(`missing:${missing.join(',')}`);
-
-  const positions = byKind.get('positions')!.rows;
-  const accounts = buildAccounts(byKind.get('accounts')!.rows);
+/** Positions is the only required export; Accounts falls back to the account fields Positions carries. */
+export function normalize(files: Partial<Record<ExportKind, Row[]>>, sources: Dataset['sources']): Dataset {
+  const positions = files.positions ?? [];
+  if (!positions.length) throw new Error('missing:positions');
+  const accounts = files.accounts?.length ? buildAccounts(files.accounts) : accountsFromPositions(positions);
   const history = buildHistory(positions);
   const asOf = history.at(-1)!.date;
   const tracked = new Set(accounts.map((a) => a.number));
@@ -277,8 +274,31 @@ export function normalize(files: ParsedExport[]): Dataset {
     first: history[0].date,
     accounts,
     history,
-    holdings: buildHoldings(positions, latestBy(byKind.get('assets')!.rows, 'AssetID'), asOf),
-    activity: buildActivity(byKind.get('activity')!.rows, tracked),
-    sources: Object.fromEntries([...byKind].map(([k, v]) => [k, v.fileName])) as Record<ExportKind, string>,
+    holdings: buildHoldings(positions, latestBy(files.assets ?? [], 'AssetID'), asOf),
+    activity: buildActivity(files.activity ?? [], tracked),
+    sources,
   };
 }
+
+function accountsFromPositions(rows: Row[]): Account[] {
+  const last = rows.reduce((m, r) => (r.BusinessDate > m ? r.BusinessDate : m), '');
+  const out = new Map<string, Account>();
+  for (const r of rows.filter((x) => x.BusinessDate === last)) {
+    const acc = out.get(r.AccountNumber) ?? {
+      number: r.AccountNumber,
+      entity: r.Entity,
+      description: str(r['Account Description']),
+      type: r.AccType,
+      status: '', // only the Accounts export carries it
+      currency: r.Currency,
+      opened: str(r.AcctOpeningDT),
+      lines: [],
+    };
+    if (!acc.lines.some((l) => l.assetClass === r.AssetClass)) acc.lines.push({ category: r.AssetCategory, assetClass: r.AssetClass, opened: str(r.AcctOpeningDT) });
+    out.set(r.AccountNumber, acc);
+  }
+  return [...out.values()];
+}
+
+/** Cash a raw Activity row moves in or out of its account (null when another leg carries it). */
+export const cashEffectOf = (r: Row): number | null => classify(r, new Set()).cashEffect;

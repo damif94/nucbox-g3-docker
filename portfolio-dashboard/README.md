@@ -4,10 +4,11 @@ Dashboard for the Safra National Bank CSV exports (Accounts, Activity, Positions
 ES/EN, light/dark, plain-language tooltips on every financial term, instrument data enriched via OpenFIGI.
 
 ## Privacy model
-- CSVs are parsed **in the browser** (PapaParse). The last uploaded set is also stored on the server
-  (`/srv/data/portfolio-dashboard`, via nginx WebDAV `PUT` on `/api/data/*`, behind the login) and shared
-  by every login, so the dashboard opens without uploading. Uploading new files is optional and can
-  replace any subset; kinds not re-uploaded fall back to the stored copies (`src/lib/store.ts`).
+- CSVs are parsed **in the browser** (PapaParse). Every upload is also kept on the server as exported
+  (`/srv/data/portfolio-dashboard/library`, nginx WebDAV on `/api/library/*`, behind the login) and shared
+  by every login. Exports of any type and period can be added in any order; the browser merges them
+  (`src/lib/merge.ts`) and shows which business days are covered (`src/lib/coverage.ts`). Activity
+  coverage is verified against the cash and quantity changes in Positions.
 - Only security identifiers (ISIN / option ticker) are sent to `/api/figi`, an nginx proxy to OpenFIGI
   (POST only, 16 KB body cap, rate-limited to OpenFIGI's anonymous quota).
 - FIGI lookups are cached in `localStorage` (identifiers only).
@@ -25,7 +26,10 @@ One `nginx:alpine` container serves the static build and proxies `/api/figi` to 
 (`deploy/nginx.conf.template`). No Node at runtime, no host port: it sits behind Nginx Proxy Manager.
 
 ```bash
-cd portfolio-dashboard && docker compose --env-file ../.env up -d --build
+cd portfolio-dashboard
+# config errors only surface at start: test before deploying
+docker build -q -t portfolio-dashboard:local . && docker run --rm -e PORTFOLIO_PASSWORD=x --tmpfs /data --entrypoint sh portfolio-dashboard:local -c '/docker-entrypoint.sh nginx -t'
+docker compose --env-file ../.env up -d
 ```
 
 Served at `https://damianferencz.org/portfolio/` (Vite `base: '/portfolio/'`). NPM strips the prefix,
@@ -37,7 +41,7 @@ One-time setup:
    The login is the app's own sign-in screen backed by cookie sessions in the container's nginx
    (`deploy/njs/auth.js`), not an NPM Access List: an Access List would lock the whole
    `damianferencz.org` host, and the browser's Basic Auth dialog can't be styled. The app shell is
-   public (no account data in it); `/api/data/*` and `/api/figi` need a session. Sessions are a
+   public (no account data in it); `/api/library/*` and `/api/figi` need a session. Sessions are a
    signed HttpOnly cookie valid 30 days; the HMAC key is `/data/.session-secret` (created on first
    start; delete it to sign everyone out). Logins are rate-limited per client IP.
    `OPENFIGI_API_KEY` stays empty (anonymous OpenFIGI tier).
@@ -64,5 +68,8 @@ Local image test: `docker build -t portfolio-dashboard:local . && docker run --r
 - `src/lib/figi.ts` – OpenFIGI client (batched, retries on 429)
 - `src/lib/analytics.ts` – KPIs, change-in-value, allocation, exposures, ladder, events, alerts
 - `src/i18n/` – UI strings and the glossary used by tooltips
+- `src/lib/library.ts` – upload library client; `src/lib/merge.ts` – combines uploads
+- `src/lib/coverage.ts`, `src/lib/calendar.ts` – coverage timeline, Activity reconciliation, U.S. bank holidays
+- `src/components/DataManager.tsx` – the Data screen (drop, preview, timeline, gaps, saved files)
 - `src/lib/session.ts`, `src/components/Login.tsx` – sign-in screen and session client
 - `deploy/` – nginx config + template, njs session auth, entrypoint scripts

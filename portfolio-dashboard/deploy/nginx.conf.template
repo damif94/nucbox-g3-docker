@@ -72,14 +72,25 @@ server {
     add_header Cache-Control no-store always;
   }
 
-  # The last uploaded CSV set (see src/lib/store.ts), shared by every login. Only these five
-  # names can be read or written. WebDAV PUT writes to a temp file on the same volume and
-  # renames it into place, so a reader never sees a half-written file.
-  location ~ ^/api/data/((accounts|positions|assets|activity)\.csv|meta\.json)$ {
+  # Upload library (src/lib/library.ts): every upload is kept as exported, as <uuid>.csv,
+  # plus <uuid>.json (kind, file name, who/when). The client writes the .json last and
+  # deletes it first, so a listed .json always has its .csv. The browser merges them.
+  # WebDAV PUT writes to a temp file on the same volume and renames it into place.
+  location = /api/library/ {
     auth_request /_auth;
-    limit_except GET PUT { deny all; }
-    alias /data/$1;
-    dav_methods PUT;
+    limit_except GET { deny all; }
+    alias /data/library/;
+    autoindex on;
+    autoindex_format json;
+    add_header Cache-Control no-store always;
+    add_header X-Content-Type-Options nosniff always;
+  }
+
+  location ~ "^/api/library/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(csv|json))$" {
+    auth_request /_auth;
+    limit_except GET PUT DELETE { deny all; }
+    alias /data/library/$1;
+    dav_methods PUT DELETE;
     dav_access user:rw;
     client_max_body_size 25m;
     client_body_temp_path /data/.tmp;

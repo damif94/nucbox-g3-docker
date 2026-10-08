@@ -1,14 +1,18 @@
 import { useSettings } from '../settings';
 import type { Dataset } from '../lib/types';
 import { changeBreakdown } from '../lib/analytics';
+import type { Coverage } from '../lib/coverage';
 import { Panel } from './ui';
 import { Term } from './Term';
 import type { TermKey } from '../i18n/glossary';
 
 /** Statement-style "change in account value", with diverging bars for the three drivers. */
-export function ChangeSummary({ ds }: { ds: Dataset }) {
+export function ChangeSummary({ ds, cov }: { ds: Dataset; cov: Coverage | null }) {
   const { t, fmt } = useSettings();
   const c = changeBreakdown(ds);
+  // stretches inside the period where Activity doesn't explain what moved (lib/coverage.ts)
+  const holes = (cov?.unexplained ?? []).filter((u) => u.upTo > ds.first && u.after < ds.asOf);
+  const unexplainedCash = holes.flatMap((u) => u.cash).reduce((s, x) => s + x.amount, 0);
   const drivers: { label: string; term: TermKey; v: number }[] = [
     { label: t.chContrib, term: 'flows', v: c.contributions },
     { label: t.chWithdraw, term: 'flows', v: c.withdrawals },
@@ -17,6 +21,11 @@ export function ChangeSummary({ ds }: { ds: Dataset }) {
   const max = Math.max(...drivers.map((d) => Math.abs(d.v)), 1);
   return (
     <Panel title={t.secChange} className="span-4">
+      {holes.length > 0 && (
+        <p className="note warn" role="status">
+          ⚠ {t.chGapsWarn(fmt.date(holes[0].after), fmt.date(holes.at(-1)!.upTo), unexplainedCash ? fmt.signedUsd(unexplainedCash, 2) : '—')}
+        </p>
+      )}
       <dl className="change">
         <div className="row strong">
           <dt>{t.chStart} <span className="muted small">{fmt.date(ds.first)}</span></dt>

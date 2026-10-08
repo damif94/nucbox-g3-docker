@@ -536,6 +536,257 @@ a {
     display: none; /* the sign-out button is enough on a phone */
   }
 }
+/* ---------- data library ---------- */
+.data {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 56px 16px 64px;
+  display: grid;
+  gap: 20px;
+  min-width: 0;
+}
+.data h1 {
+  font-family: var(--font-display);
+  font-size: clamp(30px, 5vw, 42px);
+  font-weight: 500;
+  line-height: 1.1;
+}
+.data .lead {
+  color: var(--ink-2);
+  font-size: 15.5px;
+  max-width: 64ch;
+  margin: 10px 0 0;
+}
+.data > .panel {
+  min-width: 0;
+}
+.sub {
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.btn.sm {
+  padding: 3px 9px;
+  font-size: 12.5px;
+}
+.nowrap {
+  white-space: nowrap;
+}
+.kind-tag {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--info-bg);
+  color: var(--accent);
+  font-size: 11.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.pending-list {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.pending-list li {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-areas: 'tag file x' 'what what what';
+  gap: 4px 10px;
+  align-items: center;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+}
+.pending-list li.bad {
+  border-color: color-mix(in srgb, var(--down) 40%, var(--line));
+}
+.pending-list .kind-tag {
+  grid-area: tag;
+}
+.pending-list .f {
+  grid-area: file;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pending-list .what {
+  grid-area: what;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.pending-list li.bad .what {
+  color: var(--down);
+}
+.pending-list .btn {
+  grid-area: x;
+}
+
+/* coverage timeline: one row per export kind, one cell per weekday, months side by side */
+.tl {
+  display: flex;
+  gap: 10px;
+  margin-top: 12px;
+  min-width: 0;
+}
+.tl-labels {
+  display: grid;
+  grid-template-rows: 18px repeat(4, 16px);
+  row-gap: 4px;
+  font-size: 12px;
+  color: var(--ink-2);
+  flex: none;
+}
+.tl-labels span {
+  line-height: 16px;
+  white-space: nowrap;
+}
+.tl-labels em {
+  font-style: normal;
+  color: var(--ink-3);
+  font-size: 11px;
+}
+.tl-scroll {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  min-width: 0;
+  padding-bottom: 6px;
+}
+.tl-month {
+  display: grid;
+  grid-template-rows: 18px repeat(4, 16px);
+  row-gap: 4px;
+  flex: none;
+}
+.tl-month-label {
+  font-size: 11px;
+  color: var(--ink-3);
+  text-transform: capitalize;
+  white-space: nowrap;
+}
+.tl-row {
+  display: flex;
+  gap: 2px;
+}
+.tl-cell {
+  display: inline-block;
+  width: 9px;
+  height: 16px;
+  border-radius: 2px;
+  flex: none;
+  box-sizing: border-box;
+}
+.c-covered {
+  background: var(--accent);
+}
+.c-verified {
+  background: var(--up);
+}
+.c-quiet {
+  background: color-mix(in srgb, var(--up) 40%, var(--surface));
+}
+.c-missing {
+  background: var(--down);
+}
+.c-unexplained {
+  background: var(--series-2);
+}
+.c-unchecked {
+  border: 1.5px dashed var(--ink-3);
+}
+.c-optional {
+  background: var(--grid);
+}
+.c-closed {
+  border: 1px solid var(--line);
+  background: repeating-linear-gradient(135deg, transparent 0 2px, var(--line) 2px 3px);
+}
+.tl-legend {
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.tl-legend li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tl-legend .tl-cell {
+  height: 12px;
+}
+.issues {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+  font-size: 14px;
+}
+.issues > li {
+  padding: 8px 12px;
+  border-left: 3px solid var(--line);
+  background: var(--surface-2);
+  border-radius: 0 6px 6px 0;
+}
+.issues > li.bad {
+  border-left-color: var(--down);
+}
+.issues > li.warn {
+  border-left-color: var(--warn);
+  color: var(--ink-2);
+}
+.issues ul {
+  margin: 4px 0 0;
+  padding-left: 18px;
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.ok-note {
+  margin: 0;
+  color: var(--up);
+  font-weight: 500;
+}
+.todo {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--info-bg);
+  font-size: 14px;
+}
+table.uploads th,
+table.uploads td {
+  text-align: left;
+}
+table.uploads td.f {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+table.uploads tr.superseded td {
+  color: var(--ink-3);
+}
+.period-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-bottom: 12px;
+}
 .status-note {
   margin: 0 0 16px;
   padding: 10px 12px;

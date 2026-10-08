@@ -156,7 +156,8 @@ export interface Dataset {
   history: DayValue[];
   holdings: Holding[]; // as of `asOf`
   activity: Txn[];
-  sources: Record<ExportKind, string>;
+  /** file names each export kind was merged from */
+  sources: Partial<Record<ExportKind, string[]>>;
 }
 
 export type ExportKind = 'accounts' | 'activity' | 'positions' | 'assets';

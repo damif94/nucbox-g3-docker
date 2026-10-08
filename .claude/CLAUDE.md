@@ -107,21 +107,31 @@ An NPM Access List can't be used: it applies to the whole `damianferencz.org` ho
 
 - **Login = cookie sessions in nginx itself (njs, `deploy/njs/auth.js`)**, no app server.
   `/api/login` sets a signed HttpOnly/Secure/SameSite=Strict cookie (`pd_session`, 30 days,
-  Path `/portfolio/`); `/api/data/*` and `/api/figi` check it via `auth_request`. The app
+  Path `/portfolio/`); `/api/library/*` and `/api/figi` check it via `auth_request`. The app
   shell (HTML/JS) is public — it holds no account data. Removing a user from `.env` revokes
   their sessions on the next recreate; deleting `/srv/data/portfolio-dashboard/.session-secret`
   signs everyone out. Logins are rate-limited per `X-Real-IP` (6/min, burst 5).
-- The image's njs is **0.8.x**: no `for…of`, no destructuring in `auth.js` — it fails at
-  nginx startup (container restart-loops) rather than at build time. Check with
-  `docker run --rm -v $PWD/deploy/njs:/n nginx:1.27-alpine njs -c 'import a from "/n/auth.js"'`.
+- The image's njs is **0.8.x**: no `for…of`, no destructuring in `auth.js`.
+- **nginx config errors only show at container start** (the container restart-loops and the
+  site is down). Before every deploy, build and test the config:
+  `docker build -q -t portfolio-dashboard:local . && docker run --rm -e PORTFOLIO_PASSWORD=x --tmpfs /data --entrypoint sh portfolio-dashboard:local -c '/docker-entrypoint.sh nginx -t'`.
+  Regex locations containing `{n}` must be quoted.
 
-- **The last uploaded CSV set is stored on the box** (deliberate reversal of the original
-  browser-only design, so every login opens the dashboard without uploading). Uploading is
-  optional: "load other files" replaces only the kinds you drop, the rest fall back to the
-  stored copies. Parsing still happens in the browser.
-- Storage is plain nginx WebDAV, no app server: `GET`/`PUT` on exactly
-  `/api/data/{accounts,positions,assets,activity}.csv` and `/api/data/meta.json` (original
-  file names + save time), 25 MB cap, no DELETE. Shared by all logins.
+- **Every uploaded export is kept on the box, as exported** (an upload *library*, so
+  historic data can be added in any order). The browser merges them on load
+  (`src/lib/merge.ts`): for Positions/Securities/Accounts each day comes from the most
+  recently *exported* file that has it (the `_YYYYMMDD_HHMM_` stamp in the file name), never
+  a mix; Activity rows are matched whole across files (its `Tradeid` is **not** unique).
+  Only Positions is required — Accounts falls back to the account fields in Positions.
+- **Coverage** (`src/lib/coverage.ts`): snapshot kinds are covered/missing per business day
+  (U.S. Fed holidays are "closed", `src/lib/calendar.ts`). Activity only has rows on days
+  something happened, so it is **verified against Positions** instead: between two
+  snapshots, each account's cash change must equal the Activity cash in between, and every
+  security quantity change needs an Activity row. The Data screen shows the timeline, what
+  is unexplained (account + amount) and what to export next.
+- Storage is plain nginx WebDAV, no app server: `GET /api/library/` (autoindex JSON),
+  `GET`/`PUT`/`DELETE` on `/api/library/<uuid>.(csv|json)` only. The `.json` sidecar (kind,
+  file name, uploader, sha256, CIF) is written last and deleted first. Shared by all logins.
 - The other server logic is nginx proxying `/api/figi` → OpenFIGI (CORS blocks direct
   browser calls). POST only, 16 KB body cap, rate-limited to OpenFIGI's anonymous quota.
   The login guards both this proxy and the stored account data.
@@ -137,7 +147,7 @@ An NPM Access List can't be used: it applies to the whole `damianferencz.org` ho
 
 | Host path | Container path | Notes |
 |---|---|---|
-| `/srv/data/portfolio-dashboard` | `/data` | Stored CSV set + `.session-secret` (login cookie key). Owned by uid 101 (the image's `nginx` user, shows as `messagebus` on the host), mode 700 — set by `deploy/15-data-dir.sh` at every start. Upload temp dir `.tmp` lives here so the final rename is atomic. |
+| `/srv/data/portfolio-dashboard` | `/data` | `library/` (every upload) + `.session-secret` (login cookie key); `.legacy/` holds the pre-library single set (2026-10-08), safe to delete. Owned by uid 101 (the image's `nginx` user, shows as `messagebus` on the host), mode 700 — set by `deploy/15-data-dir.sh` at every start. Upload temp dir `.tmp` lives here so the final rename is atomic. |
 
 #### Samba (SMB) share of the Toshiba drive
 

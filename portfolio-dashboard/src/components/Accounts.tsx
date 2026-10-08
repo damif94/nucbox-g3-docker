@@ -21,7 +21,7 @@ export function Accounts({ ds }: { ds: Dataset }) {
             <article key={a.number} className="account">
               <header>
                 <span className="mono acc-no">{a.number}</span>
-                <span className="status"><span aria-hidden="true">●</span> {a.status}</span>
+                {a.status && <span className="status"><span aria-hidden="true">●</span> {a.status}</span>}
               </header>
               <h3><Term k={p.term}>{t.accPurpose[p.key]}</Term></h3>
               <div className="acc-value">{fmt.usd(value, 2)}</div>
