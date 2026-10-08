@@ -96,6 +96,26 @@ its README for the engine details).
   clears its lock at startup. When testing while the bot is up, always pass
   `-e PROFILE_DIR=/tmp/testprofile`.
 
+#### portfolio-dashboard (bank CSV → portfolio dashboard)
+
+React app (`portfolio-dashboard/`, see its README) that turns the bank's four CSV
+exports into a portfolio dashboard, enriched with OpenFIGI. Served at
+`https://portfolio.damianferencz.org` behind an NPM Access List (basic auth).
+
+- **The CSVs never reach the box.** They are parsed in the browser and not stored;
+  the container only serves static files. Never add server-side upload/storage.
+- The only server logic is nginx proxying `/api/figi` → OpenFIGI (CORS blocks direct
+  browser calls, and it keeps `OPENFIGI_API_KEY` off the client). POST only, 16 KB
+  body cap, rate-limited to OpenFIGI's anonymous quota. The basic auth exists to keep
+  this proxy (and its quota) private.
+- No host port and no UFW rule: joins `nginx_npm_network` and is reached only through NPM
+  (proxy host → `http://portfolio-dashboard:80`).
+- Locally built image (`portfolio-dashboard:local`), so it carries
+  `com.centurylinklabs.watchtower.enable=false`. Rebuild after `git pull` with
+  `docker compose --env-file ../.env up -d --build`.
+- Runs `read_only` with tmpfs for `/var/cache/nginx`, `/var/run`, `/etc/nginx/conf.d`
+  (the nginx entrypoint renders `deploy/nginx.conf.template` into `conf.d` at start).
+
 #### Samba (SMB) share of the Toshiba drive
 
 The `samba` service (`samba/docker-compose.yml`, image `dperson/samba`) exports the whole Toshiba drive root (`/mnt/toshiba`) as a read-write SMB share named **`toshiba`**, so it can be mounted on a desktop and used with native drag-and-drop.
@@ -136,6 +156,7 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 | agents | 8723 | running (multi-customer) |
 | ateneo-medico | — (via NPM) | running (subpath on `damianferencz.org/ateneo-medico`) |
 | paywall-pdf | — (outbound only) | running (Telegram bot: link → article PDF) |
+| portfolio-dashboard | — (via NPM) | `portfolio.damianferencz.org`, basic auth via NPM Access List |
 
 ## Environment Variables
 
