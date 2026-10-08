@@ -69,7 +69,7 @@ function pick(data: RawFigi[]): FigiInfo {
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function post(jobs: MappingJob[], attempt = 0): Promise<MappingResult[]> {
-  const res = await fetch('/api/figi', {
+  const res = await fetch(`${import.meta.env.BASE_URL}api/figi`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(jobs),

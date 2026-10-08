@@ -100,7 +100,9 @@ its README for the engine details).
 
 React app (`portfolio-dashboard/`, see its README) that turns the bank's four CSV
 exports into a portfolio dashboard, enriched with OpenFIGI. Served at
-`https://portfolio.damianferencz.org` behind an NPM Access List (basic auth).
+`https://damianferencz.org/portfolio/` (subpath on NPM host 2, see Subpath Routing), behind
+basic auth enforced **inside the container** (`PORTFOLIO_USER` / `PORTFOLIO_PASSWORD` in `.env`).
+An NPM Access List can't be used: it applies to the whole `damianferencz.org` host, not one subpath.
 
 - **The CSVs never reach the box.** They are parsed in the browser and not stored;
   the container only serves static files. Never add server-side upload/storage.
@@ -109,7 +111,9 @@ exports into a portfolio dashboard, enriched with OpenFIGI. Served at
   body cap, rate-limited to OpenFIGI's anonymous quota. The basic auth exists to keep
   this proxy (and its quota) private.
 - No host port and no UFW rule: joins `nginx_npm_network` and is reached only through NPM
-  (proxy host → `http://portfolio-dashboard:80`).
+  (`/portfolio/` location in host 2's `advanced_config` → `http://portfolio-dashboard:80/`).
+- Built with Vite `base: '/portfolio/'`; changing the subpath means changing it there too.
+- Uses OpenFIGI's anonymous tier (`OPENFIGI_API_KEY` left empty).
 - Locally built image (`portfolio-dashboard:local`), so it carries
   `com.centurylinklabs.watchtower.enable=false`. Rebuild after `git pull` with
   `docker compose --env-file ../.env up -d --build`.
@@ -156,7 +160,7 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 | agents | 8723 | running (multi-customer) |
 | ateneo-medico | — (via NPM) | running (subpath on `damianferencz.org/ateneo-medico`) |
 | paywall-pdf | — (outbound only) | running (Telegram bot: link → article PDF) |
-| portfolio-dashboard | — (via NPM) | `portfolio.damianferencz.org`, basic auth via NPM Access List |
+| portfolio-dashboard | — (via NPM) | running (subpath on `damianferencz.org/portfolio`, basic auth in-container) |
 
 ## Environment Variables
 
@@ -201,6 +205,7 @@ Some services are routed as subpaths on `damianferencz.org` rather than their ow
 | Subpath | Container upstream | Notes |
 |---|---|---|
 | `/ateneo-medico/` | `ateneo-medico:8000` | FastAPI app; `ROOT_PATH=/ateneo-medico` for URL generation. Joins `nginx_npm_network`. |
+| `/portfolio/` | `portfolio-dashboard:80` | Static React app built with `base: '/portfolio/'`; `location = /portfolio` 301s to the slash form. |
 
 > The trailing slash on `proxy_pass` is critical — it strips the `/ateneo-medico/` prefix so the backend receives clean paths (e.g. `/login`, `/messages`).
 

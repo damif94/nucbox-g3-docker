@@ -25,15 +25,28 @@ One `nginx:alpine` container serves the static build and proxies `/api/figi` to 
 cd portfolio-dashboard && docker compose --env-file ../.env up -d --build
 ```
 
-One-time setup:
-1. Optional: set `OPENFIGI_API_KEY` in the root `.env` (empty = anonymous OpenFIGI tier)
-2. Cloudflare DNS: CNAME `portfolio` → `damianferencz.org` (DNS only)
-3. NPM (port 81):
-   - Access Lists → new list `portfolio` with a username/password
-   - Proxy Hosts → `portfolio.damianferencz.org` → `http://portfolio-dashboard:80`, Access List `portfolio`,
-     SSL: request a Let's Encrypt cert, Force SSL + HTTP/2
+Served at `https://damianferencz.org/portfolio/` (Vite `base: '/portfolio/'`). NPM strips the prefix,
+so the container itself serves from `/`.
 
-Local image test: `docker build -t portfolio-dashboard:local . && docker run --rm -p 8099:80 portfolio-dashboard:local`
+One-time setup:
+1. Root `.env`: `PORTFOLIO_PASSWORD` (required; `PORTFOLIO_USER` defaults to `damian`).
+   Basic auth lives in the container's nginx, not in an NPM Access List: an Access List would
+   lock the whole `damianferencz.org` host, not just this subpath. `/healthz` is exempt.
+   `OPENFIGI_API_KEY` stays empty (anonymous OpenFIGI tier).
+2. NPM proxy host `damianferencz.org` → Advanced → add:
+   ```nginx
+   location = /portfolio { return 301 /portfolio/; }
+   location /portfolio/ {
+     proxy_pass http://portfolio-dashboard:80/;   # trailing slash strips the prefix
+     proxy_set_header Host $host;
+     proxy_set_header X-Forwarded-Proto $scheme;
+     proxy_set_header X-Forwarded-For $remote_addr;
+     proxy_set_header X-Real-IP $remote_addr;
+   }
+   ```
+
+Local image test: `docker build -t portfolio-dashboard:local . && docker run --rm -p 8099:80 -e PORTFOLIO_PASSWORD=test portfolio-dashboard:local`
+(then open `http://localhost:8099/` — assets are requested under `/portfolio/`, so only the NPM route renders fully)
 
 ## Layout
 - `src/lib/csv.ts` – parses exports, detects the file type by its columns (not its name)

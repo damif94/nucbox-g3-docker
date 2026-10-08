@@ -8,6 +8,9 @@ services:
       - TZ=${TZ:-America/Montevideo}
       # Optional: raises OpenFIGI limits (10 -> 100 jobs/request). Empty = anonymous tier.
       - OPENFIGI_API_KEY=${OPENFIGI_API_KEY:-}
+      # Basic auth for damianferencz.org/portfolio/ (required; the container won't start without it)
+      - PORTFOLIO_USER=${PORTFOLIO_USER:-damian}
+      - PORTFOLIO_PASSWORD=${PORTFOLIO_PASSWORD:?set PORTFOLIO_PASSWORD in .env}
     read_only: true
     tmpfs:
       - /var/cache/nginx
