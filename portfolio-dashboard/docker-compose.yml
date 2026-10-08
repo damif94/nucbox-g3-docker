@@ -11,6 +11,8 @@ services:
       # Basic auth for damianferencz.org/portfolio/ (required; the container won't start without it)
       - PORTFOLIO_USER=${PORTFOLIO_USER:-damian}
       - PORTFOLIO_PASSWORD=${PORTFOLIO_PASSWORD:?set PORTFOLIO_PASSWORD in .env}
+      # Optional extra logins: user:password,user2:password2
+      - PORTFOLIO_EXTRA_USERS=${PORTFOLIO_EXTRA_USERS:-}
     read_only: true
     tmpfs:
       - /var/cache/nginx

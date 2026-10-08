@@ -101,7 +101,8 @@ its README for the engine details).
 React app (`portfolio-dashboard/`, see its README) that turns the bank's four CSV
 exports into a portfolio dashboard, enriched with OpenFIGI. Served at
 `https://damianferencz.org/portfolio/` (subpath on NPM host 2, see Subpath Routing), behind
-basic auth enforced **inside the container** (`PORTFOLIO_USER` / `PORTFOLIO_PASSWORD` in `.env`).
+basic auth enforced **inside the container** (`PORTFOLIO_USER` / `PORTFOLIO_PASSWORD` in `.env`, extra logins in
+`PORTFOLIO_EXTRA_USERS` as `user:password,user2:password2`).
 An NPM Access List can't be used: it applies to the whole `damianferencz.org` host, not one subpath.
 
 - **The CSVs never reach the box.** They are parsed in the browser and not stored;

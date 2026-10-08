@@ -29,7 +29,8 @@ Served at `https://damianferencz.org/portfolio/` (Vite `base: '/portfolio/'`). N
 so the container itself serves from `/`.
 
 One-time setup:
-1. Root `.env`: `PORTFOLIO_PASSWORD` (required; `PORTFOLIO_USER` defaults to `damian`).
+1. Root `.env`: `PORTFOLIO_PASSWORD` (required; `PORTFOLIO_USER` defaults to `damian`), plus optional
+   `PORTFOLIO_EXTRA_USERS=user:password,user2:password2` for more logins.
    Basic auth lives in the container's nginx, not in an NPM Access List: an Access List would
    lock the whole `damianferencz.org` host, not just this subpath. `/healthz` is exempt.
    `OPENFIGI_API_KEY` stays empty (anonymous OpenFIGI tier).
