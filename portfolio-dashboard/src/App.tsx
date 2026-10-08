@@ -5,7 +5,7 @@ import { normalize } from './lib/normalize';
 import { addUpload, deleteUpload, loadLibrary, type Upload } from './lib/library';
 import { KINDS, merge, type Merged } from './lib/merge';
 import { coverage, type Coverage } from './lib/coverage';
-import { PERIODS, periodView, type Period } from './lib/analytics';
+import { PERIODS, periodView, rangeView, type Period } from './lib/analytics';
 import { enrichWithFigi } from './lib/figi';
 import { AuthError, getSession, logout } from './lib/session';
 import { Header } from './components/Header';
@@ -30,7 +30,7 @@ interface Library {
 }
 
 function Dashboard() {
-  const { t } = useSettings();
+  const { t, fmt } = useSettings();
   const [ds, setDs] = useState<Dataset | null>(null);
   const [lib, setLib] = useState<Library | null>(null);
   const [figiState, setFigiState] = useState<FigiState>('idle');
@@ -39,7 +39,8 @@ function Dashboard() {
   const [booting, setBooting] = useState(true);
   const [showData, setShowData] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [period, setPeriod] = useState<Period>('all');
+  const [period, setPeriod] = useState<Period | 'custom'>('all');
+  const [custom, setCustom] = useState<{ from: string; to: string } | null>(null);
   // undefined while the session is being checked, null when signed out
   const [user, setUser] = useState<string | null | undefined>(undefined);
 
@@ -166,9 +167,12 @@ function Dashboard() {
     }
   }, [ds, figiState, enrich]);
 
-  // KPIs, the chart and "change this period" follow the selected period; the rest is as of the last day
-  const view = useMemo(() => (ds ? periodView(ds, period) : null), [ds, period]);
-  const periods = useMemo(() => (ds ? PERIODS.filter((p) => p === 'all' || periodView(ds, p).first > ds.first) : []), [ds]);
+  // The chart and "change this period" follow the selected period. A custom range snaps each end
+  // to the closest earlier Positions snapshot; with fewer than two snapshots it falls back to all.
+  const customView = useMemo(() => (ds && custom ? rangeView(ds, custom.from, custom.to) : null), [ds, custom]);
+  const view = useMemo(() => (!ds ? null : period === 'custom' ? customView ?? ds : periodView(ds, period)), [ds, period, customView]);
+  // the KPI tiles always show the latest day; their change is measured from the period's start
+  const kpiView = useMemo(() => (ds && view ? rangeView(ds, view.first, ds.asOf) ?? ds : null), [ds, view]);
 
   if (user === null) {
     return (
@@ -219,23 +223,45 @@ function Dashboard() {
       <Header ds={ds} user={user} onSignOut={signOut} onReset={openData} />
       <main className="dash">
         {notice && <p className="status-note" role="status">{notice}</p>}
-        {periods.length > 1 && (
-          <div className="period-bar">
-            <span className="muted small">{t.periods.label}</span>
-            <div className="seg" role="group" aria-label={t.periods.label}>
-              {periods.map((p) => (
-                <button key={p} aria-pressed={period === p} onClick={() => setPeriod(p)}>
-                  {t.periods[p]}
-                </button>
-              ))}
-            </div>
+        <div className="period-bar">
+          <span className="muted small">{t.periods.label}</span>
+          <div className="seg" role="group" aria-label={t.periods.label}>
+            {[...PERIODS, 'custom' as const].map((p) => (
+              <button
+                key={p}
+                aria-pressed={period === p}
+                onClick={() => {
+                  // custom starts from whatever is on screen, so it can be adjusted from there
+                  if (p === 'custom' && !custom) setCustom({ from: view.first, to: view.asOf });
+                  setPeriod(p);
+                }}
+              >
+                {t.periods[p]}
+              </button>
+            ))}
           </div>
+          {period === 'custom' && custom && (
+            <div className="range-pick">
+              <label>
+                <span>{t.chFrom}</span>
+                <input type="date" value={custom.from} min={ds.first} max={ds.asOf} required onChange={(e) => e.target.value && setCustom({ ...custom, from: e.target.value })} />
+              </label>
+              <label>
+                <span>{t.chTo}</span>
+                <input type="date" value={custom.to} min={ds.first} max={ds.asOf} required onChange={(e) => e.target.value && setCustom({ ...custom, to: e.target.value })} />
+              </label>
+            </div>
+          )}
+        </div>
+        {period === 'custom' && custom && !customView && <p className="note warn period-note" role="alert">⚠ {t.chRangeInvalid}</p>}
+        {period === 'custom' && custom && customView && (customView.first !== custom.from || customView.asOf !== custom.to) && (
+          <p className="note period-note">{t.chSnapped(fmt.date(customView.first, 'long'), fmt.date(customView.asOf, 'long'))}</p>
         )}
-        <Kpis ds={view} />
+        <Kpis ds={kpiView!} />
         <Alerts ds={ds} />
         <div className="grid">
           <ValueChart ds={view} />
-          <ChangeSummary full={ds} from={view.first} to={view.asOf} cov={lib?.cov ?? null} />
+          <ChangeSummary ds={view} cov={lib?.cov ?? null} />
           <Allocation ds={ds} />
           <Issuers ds={ds} />
           <Countries ds={ds} />

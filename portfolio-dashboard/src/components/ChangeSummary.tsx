@@ -1,25 +1,14 @@
-import { useEffect, useState } from 'react';
 import { useSettings } from '../settings';
 import type { Dataset } from '../lib/types';
-import { changeBreakdown, rangeView } from '../lib/analytics';
+import { changeBreakdown } from '../lib/analytics';
 import type { Coverage } from '../lib/coverage';
 import { Panel } from './ui';
 import { Term } from './Term';
 import type { TermKey } from '../i18n/glossary';
 
-/**
- * Statement-style "change in account value", with diverging bars for the three drivers.
- * The range starts as the dashboard's period (`from`/`to`) and can be set to any two dates.
- */
-export function ChangeSummary({ full, from, to, cov }: { full: Dataset; from: string; to: string; cov: Coverage | null }) {
+/** Statement-style "change in account value" over the selected period, with diverging bars for the three drivers. */
+export function ChangeSummary({ ds, cov }: { ds: Dataset; cov: Coverage | null }) {
   const { t, fmt } = useSettings();
-  const [range, setRange] = useState({ from, to });
-  // a new dashboard period (or new data) resets the custom range
-  useEffect(() => setRange({ from, to }), [from, to]);
-  const custom = range.from !== from || range.to !== to;
-  const ds = rangeView(full, range.from, range.to) ?? rangeView(full, from, to) ?? full;
-  const invalid = !rangeView(full, range.from, range.to);
-  const snapped = !invalid && (ds.first !== range.from || ds.asOf !== range.to);
   const c = changeBreakdown(ds);
   // stretches inside the period where Activity doesn't explain what moved (lib/coverage.ts)
   const holes = (cov?.unexplained ?? []).filter((u) => u.upTo > ds.first && u.after < ds.asOf);
@@ -32,23 +21,6 @@ export function ChangeSummary({ full, from, to, cov }: { full: Dataset; from: st
   const max = Math.max(...drivers.map((d) => Math.abs(d.v)), 1);
   return (
     <Panel title={t.secChange} className="span-4">
-      <div className="range-pick">
-        <label>
-          <span>{t.chFrom}</span>
-          <input type="date" value={range.from} min={full.first} max={full.asOf} required onChange={(e) => e.target.value && setRange({ ...range, from: e.target.value })} />
-        </label>
-        <label>
-          <span>{t.chTo}</span>
-          <input type="date" value={range.to} min={full.first} max={full.asOf} required onChange={(e) => e.target.value && setRange({ ...range, to: e.target.value })} />
-        </label>
-        {custom && (
-          <button className="btn ghost sm" onClick={() => setRange({ from, to })}>
-            {t.chReset}
-          </button>
-        )}
-      </div>
-      {invalid && <p className="note warn" role="alert">⚠ {t.chRangeInvalid}</p>}
-      {snapped && <p className="note">{t.chSnapped(fmt.date(ds.first, 'long'), fmt.date(ds.asOf, 'long'))}</p>}
       {holes.length > 0 && (
         <p className="note warn" role="status">
           ⚠ {t.chGapsWarn(fmt.date(holes[0].after), fmt.date(holes.at(-1)!.upTo), unexplainedCash ? fmt.signedUsd(unexplainedCash, 2) : '—')}

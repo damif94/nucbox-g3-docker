@@ -61,17 +61,14 @@ export interface ChangeBreakdown {
   purchases: number;
 }
 
-export type Period = '1m' | '3m' | 'ytd' | '1y' | 'all';
-export const PERIODS: Period[] = ['1m', '3m', 'ytd', '1y', 'all'];
+export type Period = '1m' | '3m' | '1y' | 'all';
+export const PERIODS: Period[] = ['1m', '3m', '1y', 'all'];
 
 /** The dataset seen over a period ending on its last day (history and `first` cut to the period). */
 export function periodView(ds: Dataset, p: Period): Dataset {
   if (p === 'all') return ds;
   const end = new Date(ds.asOf + 'T00:00:00Z');
-  const from =
-    p === 'ytd'
-      ? `${ds.asOf.slice(0, 4)}-01-01`
-      : new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - (p === '1m' ? 1 : p === '3m' ? 3 : 12), end.getUTCDate())).toISOString().slice(0, 10);
+  const from = new Date(Date.UTC(end.getUTCFullYear(), end.getUTCMonth() - (p === '1m' ? 1 : p === '3m' ? 3 : 12), end.getUTCDate())).toISOString().slice(0, 10);
   // start on the last snapshot on/before `from`, so the period's change is measured from a real value
   const startIdx = Math.max(0, ds.history.findLastIndex((h) => h.date <= from));
   const history = ds.history.slice(startIdx);

@@ -785,7 +785,10 @@ table.uploads tr.superseded td {
   flex-wrap: wrap;
   align-items: flex-end;
   gap: 8px 10px;
-  margin-bottom: 12px;
+}
+.period-note {
+  text-align: right;
+  margin: -4px 0 12px;
 }
 .range-pick label {
   display: grid;
@@ -810,7 +813,8 @@ table.uploads tr.superseded td {
 }
 .period-bar {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  align-items: flex-end;
   justify-content: flex-end;
   gap: 10px;
   margin-bottom: 12px;
