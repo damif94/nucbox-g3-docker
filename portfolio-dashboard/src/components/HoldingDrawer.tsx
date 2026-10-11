@@ -1,8 +1,9 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { useSettings } from '../settings';
 import type { Dataset, Holding } from '../lib/types';
-import { noteUnderlyings, optionShares, parentIssuer, unrealized } from '../lib/analytics';
+import { couponSchedule, notePayments, noteUnderlyings, optionShares, parentIssuer, unrealized } from '../lib/analytics';
 import { figiUrl } from '../lib/figi';
+import { priceLinks } from '../lib/links';
 import { Delta, useHoldingName } from './ui';
 import { Term } from './Term';
 import type { TermKey } from '../i18n/glossary';
@@ -39,6 +40,11 @@ export function HoldingDrawer({ ds, holding: h, onClose }: { ds: Dataset; holdin
   const pctPx = h.bucket === 'bonds' || h.bucket === 'structured';
   const px = (v: number | null) => (v == null ? null : pctPx ? `${fmt.num(v, 3)}%` : fmt.usd(v, 2));
   const u = unrealized(h);
+  const links = priceLinks(h);
+  // a note with no fixed rate that still paid: its coupon is contingent
+  const paid = h.bucket === 'structured' && !h.rate ? notePayments(ds, h) : [];
+  // annualized at the schedule the last payment was made on — a ceiling: a missed observation pays nothing
+  const sched = paid.length ? couponSchedule(h) : null;
   const kindTerm: TermKey | null =
     h.bucket === 'bonds' ? 'bond' : h.bucket === 'equity' ? 'etf' : h.bucket === 'options' ? 'coveredCall' : h.ref.structuredType === 'CLN' ? 'cln' : h.bucket === 'structured' ? 'eln' : null;
 
@@ -124,6 +130,9 @@ export function HoldingDrawer({ ds, holding: h, onClose }: { ds: Dataset; holdin
               [F.maturityType, h.ref.maturityType],
               [L('coupon', F.coupon), h.rate ? `${fmt.num(h.rate, 3)}%` : null],
               [F.couponFreq, h.ref.couponFreq && h.rate ? t.freq[h.ref.couponFreq] ?? h.ref.couponFreq : null],
+              [L('contingent', F.lastContingent), paid[0] && `${fmt.num(paid[0].pct, 2)}%${sched ? ` ${t.freq[sched.freq].toLowerCase()}` : ''} · ${fmt.date(paid[0].date, 'long')} · ${fmt.usd(paid[0].amount, 2)}`],
+              [L('contingent', F.contingentAnnual), sched && `≈ ${fmt.num(paid[0].pct * sched.perYear, 2)}% · ${fmt.usd(paid[0].amount * sched.perYear, 2)}`],
+              [F.contingentPaid, paid.length > 1 && `${paid.length} · ${fmt.usd(paid.reduce((s, x) => s + x.amount, 0), 2)}`],
               [F.nextCoupon, h.nextCouponDate && `${fmt.date(h.nextCouponDate, 'long')}${h.nextCouponAmount ? ` · ${fmt.usd(h.nextCouponAmount, 2)}` : ''}`],
               [L('callable', F.nextCall), h.ref.nextCall && `${fmt.date(h.ref.nextCall, 'long')}${h.ref.nextCallPrice ? ` @ ${fmt.num(h.ref.nextCallPrice, 0)}` : ''}`],
               [F.callFeature, h.ref.callFeature],
@@ -145,6 +154,23 @@ export function HoldingDrawer({ ds, holding: h, onClose }: { ds: Dataset; holdin
             ]}
           />
         </section>
+
+        {links.length > 0 && (
+          <section className="price-links">
+            <h3>{t.dPrice}</h3>
+            {h.bucket === 'structured' && <p className="note">{t.dPriceUnderlyings}</p>}
+            {h.option?.adjusted && <p className="note">{t.dPriceAdjusted}</p>}
+            <ul>
+              {links.map((l) => (
+                <li key={l.url}>
+                  <a href={l.url} target="_blank" rel="noreferrer">
+                    <code>{l.symbol}</code> · {l.source} ↗
+                  </a>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <section>
           <h3>{t.dIds}</h3>

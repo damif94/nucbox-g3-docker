@@ -536,6 +536,31 @@ a {
     display: none; /* the sign-out button is enough on a phone */
   }
 }
+/* ---------- section tabs ---------- */
+.tabs {
+  display: flex;
+  gap: 2px;
+  margin-right: 6px;
+}
+.tabs button {
+  border: 0;
+  background: transparent;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  color: var(--ink-3);
+  box-shadow: inset 0 -2px 0 transparent;
+}
+.tabs button:hover {
+  color: var(--ink);
+  background: var(--hover);
+}
+.tabs button[aria-current='page'] {
+  color: var(--ink);
+  border-radius: 6px 6px 0 0;
+  box-shadow: inset 0 -2px 0 var(--accent);
+}
 /* ---------- data library ---------- */
 .data {
   max-width: 980px;
@@ -1584,13 +1609,15 @@ tfoot td {
   justify-content: flex-end;
 }
 .drawer {
-  width: min(520px, 100%);
+  width: min(760px, 100%);
   height: 100%;
   overflow-y: auto;
   background: var(--surface);
   border-left: 1px solid var(--line);
   padding: calc(18px + env(safe-area-inset-top, 0px)) 22px calc(28px + env(safe-area-inset-bottom, 0px));
   display: grid;
+  /* minmax(0, …) so a long ISIN/name wraps instead of widening the drawer */
+  grid-template-columns: minmax(0, 1fr);
   align-content: start;
   gap: 18px;
   animation: slide 0.18s ease-out;
@@ -1642,6 +1669,17 @@ tfoot td {
 }
 .what .note {
   margin-top: 8px;
+}
+.price-links .note {
+  margin: 0 0 8px;
+}
+.price-links ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
 }
 
 .foot {

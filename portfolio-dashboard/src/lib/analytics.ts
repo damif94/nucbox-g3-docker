@@ -290,6 +290,36 @@ export function displayName(h: Holding): string {
 }
 
 /** Underlyings referenced by a structured note, e.g. "LKD TO SPY,IWM,QQQ". */
+export interface NotePayment {
+  date: string;
+  amount: number;
+  pct: number; // of face
+}
+
+/**
+ * Coupons a note actually paid, newest first. Contingent-coupon notes report 0% in the
+ * reference data, so this is the only place their coupon shows up: the security leg
+ * ("REG INT ON 75000 BND ...", entry code INT) carries the ISIN, the amount and the face.
+ */
+/** Coup_Code -> the CPN_FREQ key it matches (they agree on every fixed-rate bond). */
+const COUP_CODE: Record<string, { freq: string; perYear: number }> = {
+  A: { freq: 'Ann', perYear: 1 },
+  S: { freq: 'SAn', perYear: 2 },
+  Q: { freq: 'Qty', perYear: 4 },
+};
+export const couponSchedule = (h: Holding) => COUP_CODE[h.ref.couponCode ?? ''] ?? null;
+
+export function notePayments(ds: Dataset, h: Holding): NotePayment[] {
+  if (!h.isin) return [];
+  return ds.activity
+    .filter((t) => t.isin === h.isin && t.account === h.account && t.code === 'INT' && (t.netAmount ?? 0) > 0)
+    .map((t) => {
+      const face = Number(t.description.match(/\bON\s+([\d,]+)\s+BND\b/)?.[1]?.replace(/,/g, '')) || Math.abs(h.quantity);
+      return { date: t.date, amount: t.netAmount!, pct: (t.netAmount! / face) * 100 };
+    })
+    .sort((a, b) => b.date.localeCompare(a.date));
+}
+
 export function noteUnderlyings(h: Holding): string[] {
   const m = h.description.match(/LKD TO ([A-Z0-9 ,]+?)(?: REG S|\s+\d|$)/);
   return m ? m[1].split(',').map((s) => s.trim()).filter(Boolean) : [];

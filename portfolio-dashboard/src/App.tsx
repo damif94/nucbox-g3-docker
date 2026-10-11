@@ -8,7 +8,7 @@ import { coverage, type Coverage } from './lib/coverage';
 import { PERIODS, periodView, rangeView, type Period } from './lib/analytics';
 import { enrichWithFigi } from './lib/figi';
 import { AuthError, getSession, logout } from './lib/session';
-import { Header } from './components/Header';
+import { Header, type Tab } from './components/Header';
 import { DataManager, type Pending } from './components/DataManager';
 import { Login } from './components/Login';
 import { Alerts, Kpis } from './components/Overview';
@@ -140,6 +140,15 @@ function Dashboard() {
     await reload().catch((e) => fail(e, t.errLoadStored));
   }, [reload, fail, t]);
 
+  const switchTab = useCallback(
+    (k: Tab) => {
+      if (k === 'data') openData();
+      else setShowData(false);
+      window.scrollTo(0, 0);
+    },
+    [openData],
+  );
+
   const signOut = useCallback(async () => {
     await logout();
     signedOut();
@@ -200,7 +209,7 @@ function Dashboard() {
   if (!ds || !view || showData) {
     return (
       <>
-        <Header user={user} onSignOut={signOut} />
+        <Header ds={ds ?? undefined} user={user} onSignOut={signOut} tab={ds && view ? 'data' : undefined} onTab={switchTab} />
         <DataManager
           uploads={lib?.uploads ?? []}
           merged={lib?.merged ?? merge([])}
@@ -220,7 +229,7 @@ function Dashboard() {
   });
   return (
     <>
-      <Header ds={ds} user={user} onSignOut={signOut} onReset={openData} />
+      <Header ds={ds} user={user} onSignOut={signOut} tab="dashboard" onTab={switchTab} />
       <main className="dash">
         {notice && <p className="status-note" role="status">{notice}</p>}
         <div className="period-bar">

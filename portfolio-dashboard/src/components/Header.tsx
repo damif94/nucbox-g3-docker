@@ -3,15 +3,20 @@ import { Term } from './Term';
 import { Logo } from './Logo';
 import type { Dataset } from '../lib/types';
 
+export type Tab = 'dashboard' | 'data';
+
 export function Header({
   ds,
   user,
-  onReset,
+  tab,
+  onTab,
   onSignOut,
 }: {
   ds?: Dataset;
   user?: string;
-  onReset?: () => void;
+  /** the open section; the tabs only show when there is a dashboard to switch to */
+  tab?: Tab;
+  onTab?: (t: Tab) => void;
   onSignOut?: () => void;
 }) {
   const { t, fmt, lang, setLang, theme, setTheme } = useSettings();
@@ -29,10 +34,14 @@ export function Header({
         )}
       </div>
       <div className="controls">
-        {onReset && (
-          <button className="btn ghost" onClick={onReset}>
-            {t.loadOther}
-          </button>
+        {tab && onTab && (
+          <nav className="tabs" aria-label={t.appName}>
+            {(['dashboard', 'data'] as const).map((k) => (
+              <button key={k} aria-current={tab === k ? 'page' : undefined} onClick={() => tab !== k && onTab(k)}>
+                {t.tabs[k]}
+              </button>
+            ))}
+          </nav>
         )}
         <div className="seg" role="group" aria-label={t.lang}>
           {(['es', 'en'] as const).map((l) => (

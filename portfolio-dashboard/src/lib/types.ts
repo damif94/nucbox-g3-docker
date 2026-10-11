@@ -34,6 +34,7 @@ export interface InstrumentRef {
   countryIssue: string | null;
   coupon: number | null;
   couponFreq: string | null; // CPN_FREQ: Qty | SAn | Mty | Oth
+  couponCode: string | null; // Coup_Code: Q | S | A | 0 — the payment schedule, even for a contingent coupon (CPN_FREQ says Mty there)
   nextCall: string | null;
   callFeature: string | null;
   nextCallPrice: number | null;
@@ -143,6 +144,7 @@ export interface Txn {
   quantity: number | null;
   price: number | null;
   cashEffect: number | null; // + in / − out of client cash; null when another leg carries it
+  netAmount: number | null; // the row's own NetAmount: a security leg carries its payment here even when cashEffect is null
   taxWithheld: number | null;
   tradeDate: string | null;
   settleDate: string | null;
