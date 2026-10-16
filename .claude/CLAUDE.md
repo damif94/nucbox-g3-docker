@@ -229,7 +229,6 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 | cloudflare-ddns | — | — |
 | postgres (shared) | 5432 | running |
 | samba | 139, 445 | running (SMB share of `/mnt/toshiba`) |
-| agents | 8723 | running (multi-customer) |
 | ateneo-medico | — (via NPM) | running (subpath on `damianferencz.org/ateneo-medico`) |
 | paywall-pdf | — (outbound only) | running (Telegram bot: link → article PDF) |
 | portfolio-dashboard | — (via NPM) | running (subpath on `damianferencz.org/portfolio`, own sign-in screen) |
@@ -348,7 +347,6 @@ Current whitelisted ports:
 | MCP Gateway | 4781 | TCP |
 | PostgreSQL (shared) | 5432 | TCP |
 | Samba (SMB) | 139, 445 | TCP |
-| Agents | 8723 | TCP |
 | Edifica Mailpit UI | 8025 | TCP |
 | Hermes dashboard | 9119 | TCP |
 
