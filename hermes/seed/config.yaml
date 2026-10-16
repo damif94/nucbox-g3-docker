@@ -1,0 +1,36 @@
+# Seed config for /srv/data/hermes/config.yaml — copied once at first setup.
+# Hermes owns the live file afterwards (migrations, `hermes config set`), so
+# change the live file and back-port anything worth keeping here.
+model:
+  provider: "anthropic"
+  default: "claude-sonnet-5-5"
+
+timezone: "America/Montevideo"
+
+# Commands run inside the hermes container itself: no Docker socket, and the
+# only host files it can see are the read-only mounts under /files.
+terminal:
+  backend: "local"
+  cwd: "/files"
+
+approvals:
+  mode: "smart"          # risky commands are LLM-rated; uncertain ones ask on Telegram
+  cron_mode: "deny"
+  unattended_mode: "deny"
+
+# Strangers messaging the bot get no reply at all (allowlist is in .env)
+unauthorized_dm_behavior: "ignore"
+
+auth:
+  # Never borrow Claude Code / Codex logins; only ANTHROPIC_API_KEY
+  adopt_external_logins: false
+
+dashboard:
+  # NPM reaches the dashboard over nginx_npm_network
+  trusted_proxies:
+    - "172.18.0.0/16"
+
+telemetry:
+  shared_metrics:
+    enabled: false
+    send: false

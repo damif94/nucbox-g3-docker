@@ -166,6 +166,30 @@ This repo only holds `edifica/docker-compose.yml`; code changes go to the edific
 - `docker compose` commands need `--env-file ../.env` (even `ps`) — the compose file uses
   required `${VAR:?}` interpolation and fails without it.
 
+#### hermes (personal assistant agent)
+
+[Hermes Agent](https://github.com/NousResearch/hermes-agent) is the personal assistant, on Telegram as
+**@DamiPersonalAssistantBot** (see `hermes/README.md`). It replaced the old WhatsApp/n8n assistant
+(the n8n "Personal Assistant" workflow, the Evolution "Dami" chatbot hook and the `agent-api` container
+were all removed on 2026-10-16). The model is Anthropic `claude-sonnet-5-5` via the shared `ANTHROPIC_API_KEY`.
+
+- **Image pinned** (`nousresearch/hermes-agent:v0.22.2`) and excluded from watchtower: upgrades migrate the
+  state in `/srv/data/hermes`, so bump the tag deliberately and back the directory up first.
+- **Read-only file access only:** `/srv/data/media` → `/files/media`, `/mnt/toshiba` → `/files/toshiba`
+  (long-form bind with `propagation: rslave`, like Emby/Samba). Shell commands run inside its own container
+  (`terminal.backend: local`); there is deliberately **no Docker socket**.
+- **Own bot token** (`HERMES_TELEGRAM_BOT_TOKEN`), and only `HERMES_TELEGRAM_ALLOWED_USERS` may talk to it;
+  others are ignored. Don't reuse a token that an n8n Telegram trigger uses: its webhook blocks polling.
+- `/srv/data/hermes/config.yaml` is the **live** config and Hermes rewrites it itself; `hermes/seed/` only
+  holds the first-setup copy. CLI: `docker exec -it -u hermes hermes /opt/hermes/.venv/bin/hermes <cmd>`.
+- **Dashboard `https://hermes.damianferencz.org`, LAN/VPN only.** The Cloudflare A record points at the
+  **private IP 192.168.0.100** (DNS-only), so the name is useless off-LAN. Because of that the certificate
+  uses the **Cloudflare DNS challenge**, since HTTP-01 can't reach a private IP. The NPM access list allows
+  `192.168.0.0/24`, `10.8.0.0/24` and `172.16.0.0/12`. The dashboard has its own login (`HERMES_DASHBOARD_*`).
+- **Hairpin caveat (applies to every host here):** a LAN client using a *public* hostname reaches NPM through
+  the router's hairpin NAT and shows up as the **WAN IP**, not 192.168.0.x. An NPM "allow 192.168.0.0/24"
+  list on a publicly-resolving host would therefore block the LAN too. The private-IP DNS record avoids this.
+
 #### Samba (SMB) share of the Toshiba drive
 
 The `samba` service (`samba/docker-compose.yml`, image `dperson/samba`) exports the whole Toshiba drive root (`/mnt/toshiba`) as a read-write SMB share named **`toshiba`**, so it can be mounted on a desktop and used with native drag-and-drop.
@@ -208,6 +232,7 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 | paywall-pdf | — (outbound only) | running (Telegram bot: link → article PDF) |
 | portfolio-dashboard | — (via NPM) | running (subpath on `damianferencz.org/portfolio`, own sign-in screen) |
 | edifica | — (via NPM), 8025 (Mailpit UI) | running (subpath on `damianferencz.org/edifica`; backend + web + Mailpit) |
+| hermes | — (outbound + NPM) | running (personal assistant on Telegram; dashboard `hermes.damianferencz.org`, LAN/VPN only) |
 
 ## Environment Variables
 
@@ -326,8 +351,9 @@ Current whitelisted ports:
 
 > When adding a new service, always update this table and run the `ufw allow` command before testing connectivity.
 
-> `paywall-pdf` deliberately appears nowhere in this table: it only makes
-> outbound connections (Telegram long polling), so it needs no port and no rule.
+> `paywall-pdf` and `hermes` deliberately appear nowhere in this table: they only make
+> outbound connections (Telegram long polling), so they need no port and no rule. Hermes'
+> dashboard is reached through NPM on 443.
 
 ## Deployment Workflow
 
