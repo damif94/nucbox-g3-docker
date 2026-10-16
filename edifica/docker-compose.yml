@@ -1,0 +1,71 @@
+# Edifica (building administration) — https://github.com/damif94/edifica
+# Images are built and published by edifica's own CI (ghcr.io, private); this file only runs them.
+# Served at https://damianferencz.org/edifica/ through NPM (host 2 advanced_config).
+services:
+  backend:
+    image: ghcr.io/damif94/edifica-backend:latest
+    container_name: edifica-backend
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-America/Montevideo}
+      EDIFICA_ENVIRONMENT: prod
+      # Shared postgres (services_shared); migrations run on container start
+      EDIFICA_DATABASE_URL: postgresql+psycopg://${EDIFICA_DB_USER:-edifica}:${EDIFICA_DB_PASSWORD:?set EDIFICA_DB_PASSWORD in .env}@postgres:5432/${EDIFICA_DB_NAME:-edifica}
+      EDIFICA_JWT_SECRET: ${EDIFICA_JWT_SECRET:?set EDIFICA_JWT_SECRET in .env}
+      EDIFICA_APP_URL: https://damianferencz.org/edifica/
+      EDIFICA_CORS_ORIGINS: '["https://damianferencz.org"]'
+      EDIFICA_SUPERADMIN_EMAIL: ${EDIFICA_SUPERADMIN_EMAIL:?set EDIFICA_SUPERADMIN_EMAIL in .env}
+      EDIFICA_SUPERADMIN_PASSWORD: ${EDIFICA_SUPERADMIN_PASSWORD:?set EDIFICA_SUPERADMIN_PASSWORD in .env}
+      # No real mail provider yet: everything lands in Mailpit (UI on :8025, LAN only)
+      EDIFICA_SMTP_HOST: mailpit
+      EDIFICA_SMTP_PORT: 1025
+      EDIFICA_SMTP_ALLOW_PLAINTEXT: "true"
+      EDIFICA_MAIL_FROM: Edifica <no-reply@damianferencz.org>
+    mem_limit: 512m
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+    networks:
+      - edifica
+      - services_shared
+
+  # nginx serving the SPA and proxying /api to `backend` (name fixed in the image)
+  web:
+    image: ghcr.io/damif94/edifica-web:latest
+    container_name: edifica-web
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    mem_limit: 64m
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+    # No host port / no UFW rule: reached only through Nginx Proxy Manager
+    networks:
+      - edifica
+      - npm_network
+
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: edifica-mailpit
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-America/Montevideo}
+      MP_MAX_MESSAGES: 1000
+      MP_DATABASE: /data/mailpit.db
+    volumes:
+      - /srv/data/edifica/mailpit:/data
+    ports:
+      - "8025:8025" # web UI (LAN); SMTP 1025 stays on the edifica network
+    mem_limit: 128m
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+    networks:
+      - edifica
+
+networks:
+  edifica:
+  services_shared:
+    external: true
+  npm_network:
+    external: true
+    name: nginx_npm_network

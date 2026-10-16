@@ -5,6 +5,8 @@ services:
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
+      # Registry logins (`docker login ghcr.io`) so private images (edifica) can be pulled
+      - /home/damian/.docker/config.json:/config.json:ro
     env_file:
       - ../.env
     environment:
