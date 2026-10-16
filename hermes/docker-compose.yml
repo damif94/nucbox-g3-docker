@@ -12,7 +12,8 @@ services:
       # s6 remaps the internal hermes user to damian so /srv/data/hermes stays ours
       - HERMES_UID=1000
       - HERMES_GID=1000
-      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in .env}
+      # Key from the dedicated "hermes" workspace in the Console
+      - ANTHROPIC_API_KEY=${HERMES_ANTHROPIC_API_KEY:?set HERMES_ANTHROPIC_API_KEY in .env}
       # Dedicated bot (@DamiPersonalAssistantBot): long polling, so no port/UFW rule
       - TELEGRAM_BOT_TOKEN=${HERMES_TELEGRAM_BOT_TOKEN:?set HERMES_TELEGRAM_BOT_TOKEN in .env}
       - TELEGRAM_ALLOWED_USERS=${HERMES_TELEGRAM_ALLOWED_USERS:?set HERMES_TELEGRAM_ALLOWED_USERS in .env}
