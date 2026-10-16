@@ -149,6 +149,23 @@ An NPM Access List can't be used: it applies to the whole `damianferencz.org` ho
 |---|---|---|
 | `/srv/data/portfolio-dashboard` | `/data` | `library/` (every upload) + `.session-secret` (login cookie key); `.legacy/` holds the pre-library single set (2026-10-08), safe to delete. Owned by uid 101 (the image's `nginx` user, shows as `messagebus` on the host), mode 700 — set by `deploy/15-data-dir.sh` at every start. Upload temp dir `.tmp` lives here so the final rename is atomic. |
 
+#### edifica (building administration)
+
+Runs [edifica](https://github.com/damif94/edifica) from images built by that repo's own CI
+(`ghcr.io/damif94/edifica-backend` / `edifica-web`, **private** — the box needs a `docker login ghcr.io`).
+This repo only holds `edifica/docker-compose.yml`; code changes go to the edifica repo.
+
+- `web` (nginx, SPA + `/api` proxy to `backend`) joins `nginx_npm_network` and is reached only
+  through NPM at `https://damianferencz.org/edifica/`. No host port.
+- `backend` uses the shared `postgres` (`services_shared`), database/user `edifica`
+  (`EDIFICA_DB_*` in `.env`); migrations run on container start. Superadmin and JWT secret also in `.env`.
+- No real mail provider yet: all mail goes to **Mailpit** (`edifica-mailpit`), UI on
+  `http://192.168.0.100:8025` (LAN, UFW-allowed). SMTP 1025 stays on the internal `edifica` network.
+  Data in `/srv/data/edifica/mailpit`.
+- Images are `:latest` with watchtower enabled, so new CI builds roll out automatically.
+- `docker compose` commands need `--env-file ../.env` (even `ps`) — the compose file uses
+  required `${VAR:?}` interpolation and fails without it.
+
 #### Samba (SMB) share of the Toshiba drive
 
 The `samba` service (`samba/docker-compose.yml`, image `dperson/samba`) exports the whole Toshiba drive root (`/mnt/toshiba`) as a read-write SMB share named **`toshiba`**, so it can be mounted on a desktop and used with native drag-and-drop.
@@ -190,6 +207,7 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 | ateneo-medico | — (via NPM) | running (subpath on `damianferencz.org/ateneo-medico`) |
 | paywall-pdf | — (outbound only) | running (Telegram bot: link → article PDF) |
 | portfolio-dashboard | — (via NPM) | running (subpath on `damianferencz.org/portfolio`, own sign-in screen) |
+| edifica | — (via NPM), 8025 (Mailpit UI) | running (subpath on `damianferencz.org/edifica`; backend + web + Mailpit) |
 
 ## Environment Variables
 
@@ -235,6 +253,7 @@ Some services are routed as subpaths on `damianferencz.org` rather than their ow
 |---|---|---|
 | `/ateneo-medico/` | `ateneo-medico:8000` | FastAPI app; `ROOT_PATH=/ateneo-medico` for URL generation. Joins `nginx_npm_network`. |
 | `/portfolio/` | `portfolio-dashboard:80` | Static React app built with `base: '/portfolio/'`; `location = /portfolio` 301s to the slash form. |
+| `/edifica/` | `edifica-web:80` | nginx serving the SPA and proxying `/api` to `edifica-backend`; `location = /edifica` 301s to the slash form. |
 
 > The trailing slash on `proxy_pass` is critical — it strips the `/ateneo-medico/` prefix so the backend receives clean paths (e.g. `/login`, `/messages`).
 
@@ -303,6 +322,7 @@ Current whitelisted ports:
 | PostgreSQL (shared) | 5432 | TCP |
 | Samba (SMB) | 139, 445 | TCP |
 | Agents | 8723 | TCP |
+| Edifica Mailpit UI | 8025 | TCP |
 
 > When adding a new service, always update this table and run the `ufw allow` command before testing connectivity.
 
