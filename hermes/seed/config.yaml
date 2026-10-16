@@ -25,11 +25,6 @@ auth:
   # Never borrow Claude Code / Codex logins; only ANTHROPIC_API_KEY
   adopt_external_logins: false
 
-dashboard:
-  # NPM reaches the dashboard over nginx_npm_network
-  trusted_proxies:
-    - "172.18.0.0/16"
-
 telemetry:
   shared_metrics:
     enabled: false

@@ -16,12 +16,11 @@ services:
       # Dedicated bot (@DamiPersonalAssistantBot): long polling, so no port/UFW rule
       - TELEGRAM_BOT_TOKEN=${HERMES_TELEGRAM_BOT_TOKEN:?set HERMES_TELEGRAM_BOT_TOKEN in .env}
       - TELEGRAM_ALLOWED_USERS=${HERMES_TELEGRAM_ALLOWED_USERS:?set HERMES_TELEGRAM_ALLOWED_USERS in .env}
-      # Dashboard: reached only via NPM at hermes.damianferencz.org (LAN/VPN-only access list).
+      # Dashboard: http://192.168.0.100:9119 (LAN + WireGuard; the router doesn't forward it).
       # Binding beyond loopback makes Hermes require a login; it refuses to start otherwise.
       - HERMES_DASHBOARD=1
       - HERMES_DASHBOARD_HOST=0.0.0.0
       - HERMES_DASHBOARD_PORT=9119
-      - HERMES_DASHBOARD_PUBLIC_URL=https://hermes.damianferencz.org
       - HERMES_DASHBOARD_BASIC_AUTH_USERNAME=${HERMES_DASHBOARD_USER:-damian}
       - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=${HERMES_DASHBOARD_PASSWORD:?set HERMES_DASHBOARD_PASSWORD in .env}
       # Keeps dashboard sessions valid across restarts
@@ -43,13 +42,8 @@ services:
         limits:
           memory: 4g
           cpus: "2.0"
+    # Dashboard only; Telegram is outbound long polling
+    ports:
+      - "192.168.0.100:9119:9119"
     labels:
       - com.centurylinklabs.watchtower.enable=false
-    # No host port / no UFW rule: Telegram is outbound, dashboard goes through NPM
-    networks:
-      - npm_network
-
-networks:
-  npm_network:
-    external: true
-    name: nginx_npm_network

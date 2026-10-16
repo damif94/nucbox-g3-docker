@@ -182,13 +182,15 @@ were all removed on 2026-10-16). The model is Anthropic `claude-sonnet-5-5` via 
   others are ignored. Don't reuse a token that an n8n Telegram trigger uses: its webhook blocks polling.
 - `/srv/data/hermes/config.yaml` is the **live** config and Hermes rewrites it itself; `hermes/seed/` only
   holds the first-setup copy. CLI: `docker exec -it -u hermes hermes /opt/hermes/.venv/bin/hermes <cmd>`.
-- **Dashboard `https://hermes.damianferencz.org`, LAN/VPN only.** The Cloudflare A record points at the
-  **private IP 192.168.0.100** (DNS-only), so the name is useless off-LAN. Because of that the certificate
-  uses the **Cloudflare DNS challenge**, since HTTP-01 can't reach a private IP. The NPM access list allows
-  `192.168.0.0/24`, `10.8.0.0/24` and `172.16.0.0/12`. The dashboard has its own login (`HERMES_DASHBOARD_*`).
-- **Hairpin caveat (applies to every host here):** a LAN client using a *public* hostname reaches NPM through
-  the router's hairpin NAT and shows up as the **WAN IP**, not 192.168.0.x. An NPM "allow 192.168.0.0/24"
-  list on a publicly-resolving host would therefore block the LAN too. The private-IP DNS record avoids this.
+- **Dashboard `http://192.168.0.100:9119`, LAN/VPN only**: plain HTTP on purpose, no NPM host. It has its own
+  login (`HERMES_DASHBOARD_*`), which Hermes requires for any non-loopback bind. The port is bound to the LAN IP and
+  the router doesn't forward it; WireGuard clients reach it through the tunnel.
+- **Docker-published ports bypass UFW** (Docker's own iptables rules), here and for every service. UFW rules
+  document intent, but the real perimeter is the router's port forwarding.
+- **Hairpin caveat** (in case an NPM access list is ever needed): a LAN client using a *public* hostname reaches
+  NPM through the router's hairpin NAT and shows up as the **WAN IP**, not 192.168.0.x. So an NPM "allow
+  192.168.0.0/24" list on a publicly-resolving host blocks the LAN too. The fix is a DNS record pointing at the
+  private IP, with a DNS-challenge certificate.
 
 #### Samba (SMB) share of the Toshiba drive
 
@@ -232,7 +234,7 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 | paywall-pdf | — (outbound only) | running (Telegram bot: link → article PDF) |
 | portfolio-dashboard | — (via NPM) | running (subpath on `damianferencz.org/portfolio`, own sign-in screen) |
 | edifica | — (via NPM), 8025 (Mailpit UI) | running (subpath on `damianferencz.org/edifica`; backend + web + Mailpit) |
-| hermes | — (outbound + NPM) | running (personal assistant on Telegram; dashboard `hermes.damianferencz.org`, LAN/VPN only) |
+| hermes | 9119 (dashboard) | running (personal assistant on Telegram; dashboard LAN/VPN only) |
 
 ## Environment Variables
 
@@ -348,12 +350,12 @@ Current whitelisted ports:
 | Samba (SMB) | 139, 445 | TCP |
 | Agents | 8723 | TCP |
 | Edifica Mailpit UI | 8025 | TCP |
+| Hermes dashboard | 9119 | TCP |
 
 > When adding a new service, always update this table and run the `ufw allow` command before testing connectivity.
 
-> `paywall-pdf` and `hermes` deliberately appear nowhere in this table: they only make
-> outbound connections (Telegram long polling), so they need no port and no rule. Hermes'
-> dashboard is reached through NPM on 443.
+> `paywall-pdf` deliberately appears nowhere in this table: it only makes
+> outbound connections (Telegram long polling), so it needs no port and no rule.
 
 ## Deployment Workflow
 

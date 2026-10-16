@@ -10,7 +10,7 @@ phone ──Telegram──▶ (long poll) hermes ──▶ Anthropic (claude-son
                                   │
                                   ├─ /files/media    (ro)  ← /srv/data/media
                                   └─ /files/toshiba  (ro)  ← /mnt/toshiba
-LAN / VPN ──https──▶ NPM ──▶ hermes:9119  (dashboard, own login)
+LAN / VPN ──http──▶ 192.168.0.100:9119  (dashboard, own login)
 ```
 
 ## Layout
@@ -32,18 +32,15 @@ back-port to `seed/` what is worth keeping.
 - **What it can touch:** shell commands run inside its own container (`terminal.backend: local`).
   There is **no Docker socket**; the only host data it sees is the two read-only mounts.
   `approvals.mode: smart` still screens risky commands, and scheduled jobs deny them.
-- **No host port, no UFW rule.** Telegram is outbound polling; the dashboard is reached
-  only through NPM.
-- **Dashboard** (`https://hermes.damianferencz.org`) holds the API keys, so it is LAN/VPN only,
-  in two layers:
-  1. The DNS record points at the **private IP** `192.168.0.100`, so the name only leads
-     anywhere on the LAN or over WireGuard (VPN clients use full-tunnel `0.0.0.0/0`).
-  2. NPM access list `LAN + VPN only` allows `192.168.0.0/24`, `10.8.0.0/24`,
-     `172.16.0.0/12` (Docker bridges, e.g. wg-easy's NAT) and denies everything else.
-
-  Because the name resolves to a private IP, Let's Encrypt can't do its usual HTTP check,
-  so the certificate uses the **Cloudflare DNS challenge** (`CF_API_TOKEN`).
-  Login is Hermes' own basic auth (`HERMES_DASHBOARD_*` in `.env`).
+- **Telegram needs no port**: it is outbound long polling.
+- **Dashboard** at `http://192.168.0.100:9119` holds the API keys, so it is LAN/VPN only.
+  The port is bound to the LAN IP and the router doesn't forward it. WireGuard clients
+  (full tunnel) reach it too, encrypted by the tunnel. On the home LAN it is plain HTTP:
+  that was accepted to keep the setup simple (no DNS, certificate or NPM host). Login is
+  Hermes' own basic auth (`HERMES_DASHBOARD_*` in `.env`); Hermes refuses to bind beyond
+  loopback without it.
+  > Docker-published ports bypass UFW (Docker writes its own iptables rules), so what keeps
+  > 9119 off the internet is the router not forwarding it, not the UFW rule.
 
 ## Operate
 
