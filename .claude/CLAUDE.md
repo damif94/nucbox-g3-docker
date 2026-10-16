@@ -171,7 +171,7 @@ This repo only holds `edifica/docker-compose.yml`; code changes go to the edific
 [Hermes Agent](https://github.com/NousResearch/hermes-agent) is the personal assistant, on Telegram as
 **@DamiPersonalAssistantBot** (see `hermes/README.md`). It replaced the old WhatsApp/n8n assistant
 (the n8n "Personal Assistant" workflow, the Evolution "Dami" chatbot hook and the `agent-api` container
-were all removed on 2026-10-16). The model is Anthropic `claude-sonnet-5-5` via the shared `ANTHROPIC_API_KEY`.
+were all removed on 2026-10-16). The model is Anthropic `claude-sonnet-5-5`, with its own key (`HERMES_ANTHROPIC_API_KEY`) from the Console workspace **`hermes`**.
 
 - **Image pinned** (`nousresearch/hermes-agent:v0.22.2`) and excluded from watchtower: upgrades migrate the
   state in `/srv/data/hermes`, so bump the tag deliberately and back the directory up first.
