@@ -168,23 +168,23 @@ This repo only holds `edifica/docker-compose.yml`; code changes go to the edific
 
 #### hermes (personal assistant agent)
 
-[Hermes Agent](https://github.com/NousResearch/hermes-agent) is the personal assistant, on Telegram as
-**@DamiPersonalAssistantBot** (see `hermes/README.md`). It replaced the old WhatsApp/n8n assistant
-(the n8n "Personal Assistant" workflow, the Evolution "Dami" chatbot hook and the `agent-api` container
-were all removed on 2026-10-16). The model is Anthropic `claude-sonnet-5-5`, with its own key (`HERMES_ANTHROPIC_API_KEY`) from the Console workspace **`hermes`**.
+Runs [hermes](https://github.com/damif94/hermes) from the image built by that repo's own CI
+(`ghcr.io/damif94/hermes`, **private**, so the box needs the same `docker login ghcr.io` as edifica). This repo
+only holds `hermes/docker-compose.yml` and the secrets in `.env`. Persona, first-boot config and custom
+skills go to the hermes repo, and so do docs: see its README.
 
-- **Image pinned** (`nousresearch/hermes-agent:v0.22.2`) and excluded from watchtower: upgrades migrate the
-  state in `/srv/data/hermes`, so bump the tag deliberately and back the directory up first.
+- Hermes Agent (Nous Research) on Telegram as **@DamiPersonalAssistantBot**, model `claude-sonnet-5-5`,
+  key `HERMES_ANTHROPIC_API_KEY` from the Console workspace **`hermes`**. It replaced the old WhatsApp/n8n
+  assistant, and `agents`/Maximus were removed too (2026-10-16).
+- `:latest` with watchtower enabled: every push to the hermes repo rolls out. Upgrading Hermes itself is a
+  `FROM` bump there; it migrates `/srv/data/hermes`, so back that directory up first.
+- State lives in `/srv/data/hermes` → `/opt/data`. `config.yaml`/`SOUL.md` there are the **live** copies,
+  which Hermes rewrites; the repo's copies only seed a first boot. CLI:
+  `docker exec -it -u hermes hermes /opt/hermes/.venv/bin/hermes <cmd>`.
 - **Read-only file access only:** `/srv/data/media` → `/files/media`, `/mnt/toshiba` → `/files/toshiba`
-  (long-form bind with `propagation: rslave`, like Emby/Samba). Shell commands run inside its own container
-  (`terminal.backend: local`); there is deliberately **no Docker socket**.
-- **Own bot token** (`HERMES_TELEGRAM_BOT_TOKEN`), and only `HERMES_TELEGRAM_ALLOWED_USERS` may talk to it;
-  others are ignored. Don't reuse a token that an n8n Telegram trigger uses: its webhook blocks polling.
-- `/srv/data/hermes/config.yaml` is the **live** config and Hermes rewrites it itself; `hermes/seed/` only
-  holds the first-setup copy. CLI: `docker exec -it -u hermes hermes /opt/hermes/.venv/bin/hermes <cmd>`.
-- **Dashboard `http://192.168.0.100:9119`, LAN/VPN only**: plain HTTP on purpose, no NPM host. It has its own
-  login (`HERMES_DASHBOARD_*`), which Hermes requires for any non-loopback bind. The port is bound to the LAN IP and
-  the router doesn't forward it; WireGuard clients reach it through the tunnel.
+  (long-form bind with `propagation: rslave`, like Emby/Samba). No Docker socket.
+- **Dashboard `http://192.168.0.100:9119`, LAN/VPN only**: plain HTTP on purpose, with its own login
+  (`HERMES_DASHBOARD_*`). The router doesn't forward it.
 - **Docker-published ports bypass UFW** (Docker's own iptables rules), here and for every service. UFW rules
   document intent, but the real perimeter is the router's port forwarding.
 - **Hairpin caveat** (in case an NPM access list is ever needed): a LAN client using a *public* hostname reaches
