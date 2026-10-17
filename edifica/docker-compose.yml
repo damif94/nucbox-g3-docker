@@ -24,6 +24,8 @@ services:
     mem_limit: 512m
     labels:
       - com.centurylinklabs.watchtower.enable=true
+      # Own image: checked hourly by watchtower-own (see watchtower/)
+      - com.centurylinklabs.watchtower.scope=own
     networks:
       - edifica
       - services_shared
@@ -39,6 +41,8 @@ services:
     mem_limit: 64m
     labels:
       - com.centurylinklabs.watchtower.enable=true
+      # Own image: checked hourly by watchtower-own (see watchtower/)
+      - com.centurylinklabs.watchtower.scope=own
     # No host port / no UFW rule: reached only through Nginx Proxy Manager
     networks:
       - edifica
