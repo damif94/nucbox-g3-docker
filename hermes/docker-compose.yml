@@ -51,3 +51,5 @@ services:
       # Rolls out every push to the hermes repo. Upgrading Hermes itself is a deliberate
       # FROM bump there (it migrates /srv/data/hermes; back it up first).
       - com.centurylinklabs.watchtower.enable=true
+      # Own image: checked hourly by watchtower-own (see watchtower/)
+      - com.centurylinklabs.watchtower.scope=own

@@ -12,8 +12,33 @@ services:
     environment:
       - TZ=America/Montevideo
       - WATCHTOWER_CLEANUP=true
+      # Weekly, for third-party images. Unscoped, so it skips anything labelled with a scope.
       - WATCHTOWER_SCHEDULE=0 0 17 * * 0
       - WATCHTOWER_LABEL_ENABLE=true
       - WATCHTOWER_NOTIFICATIONS=shoutrrr
       - WATCHTOWER_NOTIFICATION_URL=telegram://${TELEGRAM_BOT_TOKEN}@telegram/?channels=${TELEGRAM_CHAT_ID}
       - WATCHTOWER_NOTIFICATION_DELAY=30
+
+  # Our own images (edifica, hermes) are built by their repos' CI: roll them out hourly.
+  # Only touches containers labelled com.centurylinklabs.watchtower.scope=own.
+  watchtower-own:
+    image: ghcr.io/nicholas-fedor/watchtower:latest
+    container_name: watchtower-own
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /home/damian/.docker/config.json:/config.json:ro
+    env_file:
+      - ../.env
+    environment:
+      - TZ=America/Montevideo
+      - WATCHTOWER_CLEANUP=true
+      - WATCHTOWER_SCHEDULE=0 0 * * * *
+      - WATCHTOWER_LABEL_ENABLE=true
+      - WATCHTOWER_SCOPE=own
+      - WATCHTOWER_NOTIFICATIONS=shoutrrr
+      - WATCHTOWER_NOTIFICATION_URL=telegram://${TELEGRAM_BOT_TOKEN}@telegram/?channels=${TELEGRAM_CHAT_ID}
+      - WATCHTOWER_NOTIFICATION_DELAY=30
+    labels:
+      # Its own scope, so the weekly instance doesn't treat it as a duplicate and stop it
+      - com.centurylinklabs.watchtower.scope=own

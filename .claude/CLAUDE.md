@@ -162,7 +162,7 @@ This repo only holds `edifica/docker-compose.yml`; code changes go to the edific
 - No real mail provider yet: all mail goes to **Mailpit** (`edifica-mailpit`), UI on
   `http://192.168.0.100:8025` (LAN, UFW-allowed). SMTP 1025 stays on the internal `edifica` network.
   Data in `/srv/data/edifica/mailpit`.
-- Images are `:latest` with watchtower enabled, so new CI builds roll out automatically.
+- Images are `:latest` with watchtower enabled and `scope=own`, so new CI builds roll out within the hour (see Watchtower below).
 - `docker compose` commands need `--env-file ../.env` (even `ps`) — the compose file uses
   required `${VAR:?}` interpolation and fails without it.
 
@@ -176,7 +176,7 @@ skills go to the hermes repo, and so do docs: see its README.
 - Hermes Agent (Nous Research) on Telegram as **@DamiPersonalAssistantBot**, model `claude-sonnet-5-5`,
   key `HERMES_ANTHROPIC_API_KEY` from the Console workspace **`hermes`**. It replaced the old WhatsApp/n8n
   assistant, and `agents`/Maximus were removed too (2026-10-16).
-- `:latest` with watchtower enabled: every push to the hermes repo rolls out. Upgrading Hermes itself is a
+- `:latest` with watchtower enabled and `scope=own`: every push to the hermes repo rolls out within the hour. Upgrading Hermes itself is a
   `FROM` bump there; it migrates `/srv/data/hermes`, so back that directory up first.
 - State lives in `/srv/data/hermes` → `/opt/data`. `config.yaml`/`SOUL.md` there are the **live** copies,
   which Hermes rewrites; the repo's copies only seed a first boot. CLI:
@@ -213,7 +213,7 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 |---------|---------|--------|
 | portainer | 9000 | running |
 | nginx (Proxy Manager) | 80, 81, 443 | running |
-| watchtower | — | running |
+| watchtower | — | running (weekly; `watchtower-own` hourly for own images) |
 | n8n | 5678 | running |
 | mcp-router | 4781 | running |
 | mcp-server | — (internal) | running |
@@ -282,6 +282,17 @@ Some services are routed as subpaths on `damianferencz.org` rather than their ow
 | `/edifica/` | `edifica-web:80` | nginx serving the SPA and proxying `/api` to `edifica-backend`; `location = /edifica` 301s to the slash form. |
 
 > The trailing slash on `proxy_pass` is critical — it strips the `/ateneo-medico/` prefix so the backend receives clean paths (e.g. `/login`, `/messages`).
+
+### Watchtower (two instances)
+
+- **`watchtower`** (unscoped): **weekly**, Sunday 17:00, for third-party images. It skips any container that has a scope label.
+- **`watchtower-own`** (`WATCHTOWER_SCOPE=own`): **hourly**, only for containers labelled
+  `com.centurylinklabs.watchtower.scope=own`. Those are our own CI-built images: `edifica-backend`, `edifica-web`,
+  `hermes`. A new own image needs both `watchtower.enable=true` and `watchtower.scope=own`.
+- Both need `com.centurylinklabs.watchtower.enable=true` (label-enable mode). The `-own` instance carries its own
+  scope label so the weekly one doesn't stop it as a duplicate.
+- Always deploy with `docker compose --env-file ../.env up -d`. Without it the Telegram notification URL is
+  empty, and **both** instances crash-loop on "Failed to initialize Shoutrrr notifications".
 
 ### Shared Networks
 
