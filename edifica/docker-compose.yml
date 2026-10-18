@@ -1,6 +1,8 @@
 # Edifica (building administration) — https://github.com/damif94/edifica
 # Images are built and published by edifica's own CI (ghcr.io, private); this file only runs them.
 # Served at https://damianferencz.org/edifica/ through NPM (host 2 advanced_config).
+name: edifica-prod
+
 services:
   backend:
     image: ghcr.io/damif94/edifica-backend:latest
@@ -59,7 +61,10 @@ services:
     volumes:
       - /srv/data/edifica/mailpit:/data
     ports:
-      - "8025:8025" # web UI (LAN); SMTP 1025 stays on the edifica network
+      - "8025:8025" # web UI (LAN)
+      # SMTP for edifica's local dev backend (`make dev-backend` sends to localhost:1025):
+      # one Mailpit on the box, so ~/edifica's compose has none. Prod uses the edifica network.
+      - "127.0.0.1:1025:1025"
     mem_limit: 128m
     labels:
       - com.centurylinklabs.watchtower.enable=true
