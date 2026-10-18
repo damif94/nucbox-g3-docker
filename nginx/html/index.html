@@ -239,7 +239,7 @@
         services: [
           { name: 'Portainer', icon: '🐳', desc: 'Gestión de Docker', local: 9000 },
           { name: 'Nginx Proxy Manager', icon: '🔀', desc: 'Reverse proxy y SSL', local: 81 },
-          { name: 'WireGuard', icon: '🔐', desc: 'VPN (wg-easy)', public: `https://vpn.${DOMAIN}`, local: 51821 },
+          { name: 'WireGuard', icon: '🔐', desc: 'VPN (wg-easy)', public: `https://vpn.${DOMAIN}`, local: `https://vpn.${DOMAIN}` },
           { name: 'Mailpit', icon: '✉️', desc: 'Mail de Edifica', local: 8025 },
           { name: 'PostgreSQL', icon: '🐘', desc: 'Base compartida', local: 'postgres://192.168.0.100:5432', probe: false, link: false },
         ],
