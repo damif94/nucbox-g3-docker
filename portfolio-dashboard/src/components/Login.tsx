@@ -1,9 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import { useSettings } from '../settings';
-import { login } from '../lib/session';
+import { login, type Session } from '../lib/session';
 import { Logo } from './Logo';
 
-export function Login({ onSignedIn }: { onSignedIn: (user: string) => void }) {
+export function Login({ onSignedIn }: { onSignedIn: (s: Session) => void }) {
   const { t } = useSettings();
   const [user, setUser] = useState('');
   const [password, setPassword] = useState('');
@@ -18,7 +18,7 @@ export function Login({ onSignedIn }: { onSignedIn: (user: string) => void }) {
     setError(null);
     const res = await login(user, password);
     setBusy(false);
-    if (res.ok) return onSignedIn(res.user);
+    if (res.ok) return onSignedIn(res.session);
     setPassword('');
     setError(res.reason === 'invalid' ? t.loginInvalid : res.reason === 'limited' ? t.loginLimited : t.loginError);
   }

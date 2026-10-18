@@ -8,12 +8,19 @@ export type Tab = 'dashboard' | 'data';
 export function Header({
   ds,
   user,
+  profiles,
+  profile,
+  onProfile,
   tab,
   onTab,
   onSignOut,
 }: {
   ds?: Dataset;
   user?: string;
+  /** the profiles this login may open; the picker only shows when there is more than one */
+  profiles?: string[];
+  profile?: string;
+  onProfile?: (p: string) => void;
   /** the open section; the tabs only show when there is a dashboard to switch to */
   tab?: Tab;
   onTab?: (t: Tab) => void;
@@ -50,6 +57,18 @@ export function Header({
             </button>
           ))}
         </div>
+        {profiles && profiles.length > 1 && profile && onProfile && (
+          <label className="profile-pick">
+            <span className="sr-only">{t.profile}</span>
+            <select value={profile} title={t.profile} onChange={(e) => onProfile(e.target.value)}>
+              {profiles.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {user && onSignOut && (
           <span className="user">
             <span className="user-name" title={user}>

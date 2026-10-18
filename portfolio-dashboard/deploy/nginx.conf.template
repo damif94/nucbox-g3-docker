@@ -72,24 +72,26 @@ server {
     add_header Cache-Control no-store always;
   }
 
-  # Upload library (src/lib/library.ts): every upload is kept as exported, as <uuid>.csv,
-  # plus <uuid>.json (kind, file name, who/when). The client writes the .json last and
-  # deletes it first, so a listed .json always has its .csv. The browser merges them.
+  # Upload library (src/lib/library.ts), one per profile (/data/library/<profile>/): every
+  # upload is kept as exported, as <uuid>.csv, plus <uuid>.json (kind, file name, who/when).
+  # The client writes the .json last and deletes it first, so a listed .json always has its
+  # .csv. The browser merges them. The named capture $pd_profile is what auth.check reads to
+  # decide whether this login may open that profile (403 if not).
   # WebDAV PUT writes to a temp file on the same volume and renames it into place.
-  location = /api/library/ {
+  location ~ "^/api/library/(?<pd_profile>[a-z0-9][a-z0-9_-]{0,31})/$" {
     auth_request /_auth;
     limit_except GET { deny all; }
-    alias /data/library/;
+    alias /data/library/$pd_profile/;
     autoindex on;
     autoindex_format json;
     add_header Cache-Control no-store always;
     add_header X-Content-Type-Options nosniff always;
   }
 
-  location ~ "^/api/library/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(csv|json))$" {
+  location ~ "^/api/library/(?<pd_profile>[a-z0-9][a-z0-9_-]{0,31})/(?<pd_file>[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.(csv|json))$" {
     auth_request /_auth;
     limit_except GET PUT DELETE { deny all; }
-    alias /data/library/$1;
+    alias /data/library/$pd_profile/$pd_file;
     dav_methods PUT DELETE;
     dav_access user:rw;
     client_max_body_size 25m;

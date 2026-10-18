@@ -1,5 +1,5 @@
-// The upload library on the server (see deploy/nginx.conf.template): every export ever
-// uploaded, kept exactly as exported. Nothing is merged on the server; merge.ts combines
+// The upload library on the server (see deploy/nginx.conf.template), one per profile: every
+// export ever uploaded, kept exactly as exported. Nothing is merged on the server; merge.ts combines
 // the uploads in the browser, so a parsing fix later re-reads every old file correctly.
 import { parseText, type ParsedExport } from './csv';
 import { AuthError } from './session';
@@ -22,12 +22,13 @@ export interface Upload extends UploadMeta {
   exportedAt: string;
 }
 
-const BASE = `${import.meta.env.BASE_URL}api/library/`;
+const ROOT = `${import.meta.env.BASE_URL}api/library/`;
+const base = (profile: string) => `${ROOT}${encodeURIComponent(profile)}/`;
 
 async function call(url: string, init?: RequestInit): Promise<Response> {
   const res = await fetch(url, { cache: 'no-store', ...init });
   if (res.status === 401) throw new AuthError();
-  if (!res.ok && !(init?.method === 'DELETE' && res.status === 404)) throw new Error(`${url.slice(BASE.length) || 'library'}: HTTP ${res.status}`);
+  if (!res.ok && !(init?.method === 'DELETE' && res.status === 404)) throw new Error(`${url.slice(ROOT.length) || 'library'}: HTTP ${res.status}`);
   return res;
 }
 
@@ -43,7 +44,8 @@ export async function sha256(text: string): Promise<string> {
 
 export const cifOf = (p: ParsedExport): string | null => p.rows.find((r) => r.CIF)?.CIF ?? null;
 
-export async function loadLibrary(): Promise<Upload[]> {
+export async function loadLibrary(profile: string): Promise<Upload[]> {
+  const BASE = base(profile);
   const listing = (await (await call(BASE)).json()) as { name: string; type: string }[];
   const names = new Set(listing.filter((e) => e.type === 'file').map((e) => e.name));
   const ids = [...names].filter((n) => n.endsWith('.json') && names.has(n.replace(/\.json$/, '.csv'))).map((n) => n.slice(0, -5));
@@ -61,7 +63,8 @@ export async function loadLibrary(): Promise<Upload[]> {
 }
 
 /** Stores one upload: the CSV first, then the .json that makes it visible. */
-export async function addUpload(p: ParsedExport, sha: string, user: string | null): Promise<void> {
+export async function addUpload(profile: string, p: ParsedExport, sha: string, user: string | null): Promise<void> {
+  const BASE = base(profile);
   const id = crypto.randomUUID();
   const meta: UploadMeta = { v: 1, kind: p.kind, fileName: p.fileName, uploadedAt: new Date().toISOString(), uploadedBy: user, sha256: sha, cif: cifOf(p) };
   await call(`${BASE}${id}.csv`, { method: 'PUT', headers: { 'Content-Type': 'text/csv' }, body: p.text });
@@ -69,7 +72,8 @@ export async function addUpload(p: ParsedExport, sha: string, user: string | nul
 }
 
 /** Removes one upload: the .json first, so a half-finished delete never lists a missing file. */
-export async function deleteUpload(id: string): Promise<void> {
+export async function deleteUpload(profile: string, id: string): Promise<void> {
+  const BASE = base(profile);
   await call(`${BASE}${id}.json`, { method: 'DELETE' });
   await call(`${BASE}${id}.csv`, { method: 'DELETE' });
 }

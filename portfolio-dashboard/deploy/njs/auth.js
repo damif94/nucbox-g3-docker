@@ -1,11 +1,13 @@
 // Cookie sessions for the dashboard, run inside nginx (njs) so there is no app server.
-// Logins come from the users file written at startup by deploy/10-users.sh; the HMAC key
-// lives on the data volume (deploy/15-data-dir.sh), so sessions survive restarts.
+// Logins and profiles come from the files written at startup by deploy/10-users.sh; the HMAC
+// key lives on the data volume (deploy/15-data-dir.sh), so sessions survive restarts.
 // A session is "<base64url user>.<expiry>.<hmac>"; dropping a user from .env revokes it.
+// Each profile is its own upload library; a user only reaches the profiles that list them.
 import fs from 'fs';
 import crypto from 'crypto';
 
 const USERS_FILE = '/etc/nginx/conf.d/users';
+const PROFILES_FILE = '/etc/nginx/conf.d/profiles';
 const SECRET_FILE = '/data/.session-secret';
 const COOKIE = 'pd_session';
 // the browser-facing path: NPM serves the app under /portfolio/ and strips the prefix
@@ -26,6 +28,16 @@ function users() {
   return map;
 }
 
+// the profiles this user may open, in the order .env lists them
+function profilesOf(user) {
+  const out = [];
+  fs.readFileSync(PROFILES_FILE, 'utf8').split('\n').forEach(function (line) {
+    const i = line.indexOf(':');
+    if (i > 0 && line.slice(i + 1).split(',').indexOf(user) >= 0) out.push(line.slice(0, i));
+  });
+  return out;
+}
+
 const mac = (key, s) => crypto.createHmac('sha256', key).update(s).digest('base64url');
 
 // compares MACs of both values, so the early exit of === reveals nothing about the inputs
@@ -43,7 +55,7 @@ function sessionUser(r) {
   const key = secret();
   if (!same(key, sig, mac(key, u64 + '.' + exp))) return null;
   const user = Buffer.from(u64, 'base64url').toString();
-  return Object.prototype.hasOwnProperty.call(users(), user) ? user : null;
+  return Object.prototype.hasOwnProperty.call(users(), user) && profilesOf(user).length ? user : null;
 }
 
 const cookie = (value, maxAge) =>
@@ -55,14 +67,18 @@ function json(r, status, body) {
   r.return(status, JSON.stringify(body));
 }
 
-// auth_request target for the protected locations
+// auth_request target for the protected locations. The library locations set $pd_profile
+// (a named capture, already normalized by nginx); subrequests share the parent's variables.
 function check(r) {
-  r.return(sessionUser(r) ? 204 : 401);
+  const user = sessionUser(r);
+  if (!user) return r.return(401);
+  const profile = r.variables.pd_profile;
+  r.return(!profile || profilesOf(user).indexOf(profile) >= 0 ? 204 : 403);
 }
 
 function session(r) {
   const user = sessionUser(r);
-  if (user) json(r, 200, { user });
+  if (user) json(r, 200, { user, profiles: profilesOf(user) });
   else json(r, 401, { error: 'unauthenticated' });
 }
 
@@ -79,12 +95,12 @@ function login(r) {
   const key = secret();
   const known = Object.prototype.hasOwnProperty.call(all, user);
   // compare even for unknown users so the timing doesn't tell which names exist
-  const ok = same(key, password, known ? all[user] : '\u0000no-user') && known && user !== '';
+  const ok = same(key, password, known ? all[user] : '\u0000no-user') && known && user !== '' && profilesOf(user).length > 0;
   if (!ok) return json(r, 401, { error: 'invalid credentials' });
   const exp = Math.floor(Date.now() / 1000) + TTL;
   const u64 = Buffer.from(user).toString('base64url');
   r.headersOut['Set-Cookie'] = cookie(`${u64}.${exp}.${mac(key, u64 + '.' + exp)}`, TTL);
-  json(r, 200, { user });
+  json(r, 200, { user, profiles: profilesOf(user) });
 }
 
 function logout(r) {

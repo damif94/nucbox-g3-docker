@@ -13,8 +13,11 @@ services:
       - PORTFOLIO_PASSWORD=${PORTFOLIO_PASSWORD:?set PORTFOLIO_PASSWORD in .env}
       # Optional extra logins: user:password,user2:password2
       - PORTFOLIO_EXTRA_USERS=${PORTFOLIO_EXTRA_USERS:-}
+      # Optional profiles (separate libraries) and their logins: profile:user,user;profile2:user
+      # Empty = one profile "main" shared by every login
+      - PORTFOLIO_PROFILES=${PORTFOLIO_PROFILES:-}
     volumes:
-      # the last uploaded CSV set; the entrypoint hands it to the nginx user
+      # every profile's upload library; the entrypoint hands it to the nginx user
       - /srv/data/portfolio-dashboard:/data
     read_only: true
     tmpfs:

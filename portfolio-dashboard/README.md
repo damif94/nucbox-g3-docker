@@ -5,8 +5,9 @@ ES/EN, light/dark, plain-language tooltips on every financial term, instrument d
 
 ## Privacy model
 - CSVs are parsed **in the browser** (PapaParse). Every upload is also kept on the server as exported
-  (`/srv/data/portfolio-dashboard/library`, nginx WebDAV on `/api/library/*`, behind the login) and shared
-  by every login. Exports of any type and period can be added in any order; the browser merges them
+  (`/srv/data/portfolio-dashboard/library/<profile>`, nginx WebDAV on `/api/library/<profile>/*`, behind
+  the login) and shared by every login of that profile. Each profile is a separate portfolio; a login
+  that may open several gets a picker in the header. Exports of any type and period can be added in any order; the browser merges them
   (`src/lib/merge.ts`) and shows which business days are covered (`src/lib/coverage.ts`). Activity
   coverage is verified against the cash and quantity changes in Positions.
 - Only security identifiers (ISIN / option ticker) are sent to `/api/figi`, an nginx proxy to OpenFIGI
@@ -37,7 +38,9 @@ so the container itself serves from `/`.
 
 One-time setup:
 1. Root `.env`: `PORTFOLIO_PASSWORD` (required; `PORTFOLIO_USER` defaults to `damian`), plus optional
-   `PORTFOLIO_EXTRA_USERS=user:password,user2:password2` for more logins.
+   `PORTFOLIO_EXTRA_USERS=user:password,user2:password2` for more logins, and optional
+   `PORTFOLIO_PROFILES=profile:user,user;profile2:user` for separate portfolios (empty = one profile,
+   `main`, for every login). The container refuses to start if a profile lists a name with no login.
    The login is the app's own sign-in screen backed by cookie sessions in the container's nginx
    (`deploy/njs/auth.js`), not an NPM Access List: an Access List would lock the whole
    `damianferencz.org` host, and the browser's Basic Auth dialog can't be styled. The app shell is

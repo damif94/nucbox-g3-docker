@@ -105,6 +105,13 @@ the app's own **sign-in screen** (`PORTFOLIO_USER` / `PORTFOLIO_PASSWORD` in `.e
 `PORTFOLIO_EXTRA_USERS` as `user:password,user2:password2`; recreate the container after editing).
 An NPM Access List can't be used: it applies to the whole `damianferencz.org` host, not one subpath.
 
+- **Profiles = separate portfolios**, each its own library in `library/<profile>/`.
+  `PORTFOLIO_PROFILES=profile:user,user;profile2:user` says which logins open which profile; a
+  login with several gets a picker in the header. Current setup: `ferencz` (damian, dferencz,
+  nicoferencz; CIF CAA1543) and `viviydaniel` (viviydaniel, plus the three ferencz logins). The
+  access check is the named capture `$pd_profile` in the library locations, read by `auth.check`
+  (403 if the login isn't listed). A profile naming a user with no login stops the container
+  from starting; a login in no profile can't sign in.
 - **Login = cookie sessions in nginx itself (njs, `deploy/njs/auth.js`)**, no app server.
   `/api/login` sets a signed HttpOnly/Secure/SameSite=Strict cookie (`pd_session`, 30 days,
   Path `/portfolio/`); `/api/library/*` and `/api/figi` check it via `auth_request`. The app
@@ -129,9 +136,9 @@ An NPM Access List can't be used: it applies to the whole `damianferencz.org` ho
   snapshots, each account's cash change must equal the Activity cash in between, and every
   security quantity change needs an Activity row. The Data screen shows the timeline, what
   is unexplained (account + amount) and what to export next.
-- Storage is plain nginx WebDAV, no app server: `GET /api/library/` (autoindex JSON),
-  `GET`/`PUT`/`DELETE` on `/api/library/<uuid>.(csv|json)` only. The `.json` sidecar (kind,
-  file name, uploader, sha256, CIF) is written last and deleted first. Shared by all logins.
+- Storage is plain nginx WebDAV, no app server: `GET /api/library/<profile>/` (autoindex JSON),
+  `GET`/`PUT`/`DELETE` on `/api/library/<profile>/<uuid>.(csv|json)` only. The `.json` sidecar (kind,
+  file name, uploader, sha256, CIF) is written last and deleted first. Shared by the profile's logins.
 - The other server logic is nginx proxying `/api/figi` → OpenFIGI (CORS blocks direct
   browser calls). POST only, 16 KB body cap, rate-limited to OpenFIGI's anonymous quota.
   The login guards both this proxy and the stored account data.
@@ -147,7 +154,7 @@ An NPM Access List can't be used: it applies to the whole `damianferencz.org` ho
 
 | Host path | Container path | Notes |
 |---|---|---|
-| `/srv/data/portfolio-dashboard` | `/data` | `library/` (every upload) + `.session-secret` (login cookie key); `.legacy/` holds the pre-library single set (2026-10-08), safe to delete. Owned by uid 101 (the image's `nginx` user, shows as `messagebus` on the host), mode 700 — set by `deploy/15-data-dir.sh` at every start. Upload temp dir `.tmp` lives here so the final rename is atomic. |
+| `/srv/data/portfolio-dashboard` | `/data` | `library/<profile>/` (every upload; flat files from before profiles are moved into the first profile at start) + `.session-secret` (login cookie key); `.legacy/` holds the pre-library single set (2026-10-08), safe to delete. Owned by uid 101 (the image's `nginx` user, shows as `messagebus` on the host), mode 700 — set by `deploy/15-data-dir.sh` at every start. Upload temp dir `.tmp` lives here so the final rename is atomic. |
 
 #### edifica (building administration)
 
