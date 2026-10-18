@@ -160,8 +160,14 @@ This repo only holds `edifica/docker-compose.yml`; code changes go to the edific
 - `backend` uses the shared `postgres` (`services_shared`), database/user `edifica`
   (`EDIFICA_DB_*` in `.env`); migrations run on container start. Superadmin and JWT secret also in `.env`.
 - No real mail provider yet: all mail goes to **Mailpit** (`edifica-mailpit`), UI on
-  `http://192.168.0.100:8025` (LAN, UFW-allowed). SMTP 1025 stays on the internal `edifica` network.
-  Data in `/srv/data/edifica/mailpit`.
+  `http://192.168.0.100:8025` (LAN, UFW-allowed). Data in `/srv/data/edifica/mailpit`. One Mailpit for
+  every building (mail config is per app, not per building) **and for edifica's local dev**: it also publishes
+  SMTP on `127.0.0.1:1025` (localhost only), where `make dev-backend` in `~/edifica` sends; the dev compose
+  has no Mailpit of its own. Prod reaches it as `mailpit:1025` on the internal network. It goes away from
+  prod once a real SMTP provider is set (`EDIFICA_SMTP_*`).
+- Compose project is **`edifica-prod`** (`name:` in the compose file). `~/edifica`'s dev compose is project
+  `edifica`; with the same name the two stacks mixed containers and the prod Mailpit never joined the prod
+  network (backend → 503 "Could not send welcome email"). Keep the names distinct.
 - Images are `:latest` with watchtower enabled and `scope=own`, so new CI builds roll out within the hour (see Watchtower below).
 - `docker compose` commands need `--env-file ../.env` (even `ps`) — the compose file uses
   required `${VAR:?}` interpolation and fails without it.
