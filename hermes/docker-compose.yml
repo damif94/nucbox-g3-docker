@@ -27,6 +27,15 @@ services:
       - HERMES_DASHBOARD_BASIC_AUTH_PASSWORD=${HERMES_DASHBOARD_PASSWORD:?set HERMES_DASHBOARD_PASSWORD in .env}
       # Keeps dashboard sessions valid across restarts
       - HERMES_DASHBOARD_BASIC_AUTH_SECRET=${HERMES_DASHBOARD_SECRET:?set HERMES_DASHBOARD_SECRET in .env}
+      # phone-alert skill (Twilio outbound calls to Damian's own number). Optional: without
+      # them the skill just reports missing env and the rest of Hermes is unaffected.
+      - TWILIO_ACCOUNT_SID=${TWILIO_ACCOUNT_SID:-}
+      - TWILIO_AUTH_TOKEN=${TWILIO_AUTH_TOKEN:-}
+      - TWILIO_FROM=${TWILIO_FROM:-}
+      - PHONE_ALERT_TO=${PHONE_ALERT_TO:-}
+      # push-alert skill (Pushover emergency alerts to Damian's iPhone). Optional, like Twilio.
+      - PUSHOVER_APP_TOKEN=${PUSHOVER_APP_TOKEN:-}
+      - PUSHOVER_USER_KEY=${PUSHOVER_USER_KEY:-}
     volumes:
       # All agent state: config.yaml, SOUL.md, memories, skills, cron, sessions
       - /srv/data/hermes:/opt/data
