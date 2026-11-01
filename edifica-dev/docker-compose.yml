@@ -1,0 +1,64 @@
+# Edifica DEV/demo instance — https://damianferencz.org/edifica-dev/ (NPM host 2, location /edifica-dev/).
+# Same backend image as prod but its own database (edifica_dev) and JWT secret; demo data via
+# `docker run` of edifica.demo (see README note below). The web image is built locally because the
+# base path is baked in at build time:
+#   docker build --build-arg BASE_PATH=/edifica-dev/ -t edifica-web-dev:main <frontend dir>
+# No watchtower labels: update by hand (docker compose pull backend / rebuild web).
+name: edifica-dev
+
+services:
+  backend:
+    image: ghcr.io/damif94/edifica-backend:latest
+    container_name: edifica-dev-backend
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-America/Montevideo}
+      EDIFICA_ENVIRONMENT: prod # service stays hardened; only the one-off seed runs as `dev`
+      EDIFICA_DATABASE_URL: postgresql+psycopg://${EDIFICA_DB_USER}:${EDIFICA_DB_PASSWORD}@postgres:5432/${EDIFICA_DB_NAME}
+      EDIFICA_JWT_SECRET: ${EDIFICA_JWT_SECRET}
+      EDIFICA_APP_URL: https://damianferencz.org/edifica-dev/
+      EDIFICA_CORS_ORIGINS: '["https://damianferencz.org"]'
+      EDIFICA_SUPERADMIN_EMAIL: ${EDIFICA_SUPERADMIN_EMAIL}
+      EDIFICA_SUPERADMIN_PASSWORD: ${EDIFICA_SUPERADMIN_PASSWORD}
+      EDIFICA_SMTP_HOST: mailpit
+      EDIFICA_SMTP_PORT: 1025
+      EDIFICA_SMTP_ALLOW_PLAINTEXT: "true"
+      EDIFICA_MAIL_FROM: Edifica Dev <no-reply@damianferencz.org>
+    mem_limit: 512m
+    networks:
+      - edifica_dev
+      - services_shared
+
+  # Own Mailpit (UI on LAN :8026) — joining prod's network would make the dev backend answer to
+  # `backend` there too.
+  mailpit:
+    image: axllent/mailpit:latest
+    container_name: edifica-dev-mailpit
+    restart: unless-stopped
+    environment:
+      TZ: ${TZ:-America/Montevideo}
+    ports:
+      - "8026:8025"
+    mem_limit: 128m
+    networks:
+      - edifica_dev
+
+  web:
+    image: edifica-web-dev:main
+    container_name: edifica-dev-web
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_healthy
+    mem_limit: 64m
+    networks:
+      - edifica_dev
+      - npm_network
+
+networks:
+  edifica_dev:
+  services_shared:
+    external: true
+  npm_network:
+    external: true
+    name: nginx_npm_network
