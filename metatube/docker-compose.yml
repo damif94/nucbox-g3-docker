@@ -12,6 +12,8 @@ services:
       - DELETE_FILE_ON_TRASHCAN=true
     volumes:
       - /srv/data/media/metatube:/downloads
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     networks:
       - services_shared
 
