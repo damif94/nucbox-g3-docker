@@ -179,6 +179,21 @@ This repo only holds `edifica/docker-compose.yml`; code changes go to the edific
 - `docker compose` commands need `--env-file ../.env` (even `ps`) — the compose file uses
   required `${VAR:?}` interpolation and fails without it.
 
+#### edifica-dev (edifica dev/demo instance)
+
+A second edifica at `https://damianferencz.org/edifica-dev/` for demos and trying things out, fully
+apart from prod (`edifica-dev/docker-compose.yml`, compose project **`edifica-dev`**).
+
+- Same backend image as prod (`ghcr.io/damif94/edifica-backend:latest`) but its own database and JWT
+  secret, from **`edifica-dev/.env`** (git-crypt encrypted). Compose reads that file by itself, so run
+  plain `docker compose up -d` there — **not** `--env-file ../.env`, which would point it at prod's database.
+- The web image is **built locally** (`edifica-web-dev:main`), because the base path is baked in at build time:
+  `docker build --build-arg BASE_PATH=/edifica-dev/ -t edifica-web-dev:main <frontend dir>`.
+- **No watchtower labels**: update by hand (`docker compose pull backend`, rebuild web).
+- Own Mailpit (`edifica-dev-mailpit`), UI on `http://192.168.0.100:8026` (LAN, UFW-allowed). It can't share
+  prod's: joining prod's network would make the dev backend answer to `backend` there too.
+- Backend runs with `EDIFICA_ENVIRONMENT=prod` so the service stays hardened; only the one-off demo seed runs as `dev`.
+
 #### hermes (personal assistant agent)
 
 Runs [hermes](https://github.com/damif94/hermes) from the image built by that repo's own CI
@@ -246,6 +261,7 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 | paywall-pdf | — (outbound only) | running (Telegram bot: link → article PDF) |
 | portfolio-dashboard | — (via NPM) | running (subpath on `damianferencz.org/portfolio`, own sign-in screen) |
 | edifica | — (via NPM), 8025 (Mailpit UI) | running (subpath on `damianferencz.org/edifica`; backend + web + Mailpit) |
+| edifica-dev | — (via NPM), 8026 (Mailpit UI) | running (subpath on `damianferencz.org/edifica-dev`; dev/demo instance) |
 | hermes | 9119 (dashboard) | running (personal assistant on Telegram; dashboard LAN/VPN only) |
 
 ## Environment Variables
@@ -293,6 +309,7 @@ Some services are routed as subpaths on `damianferencz.org` rather than their ow
 | `/ateneo-medico/` | `ateneo-medico:8000` | FastAPI app; `ROOT_PATH=/ateneo-medico` for URL generation. Joins `nginx_npm_network`. |
 | `/portfolio/` | `portfolio-dashboard:80` | Static React app built with `base: '/portfolio/'`; `location = /portfolio` 301s to the slash form. |
 | `/edifica/` | `edifica-web:80` | nginx serving the SPA and proxying `/api` to `edifica-backend`; `location = /edifica` 301s to the slash form. |
+| `/edifica-dev/` | `edifica-dev-web:80` | Dev/demo edifica, same shape as `/edifica/`. |
 
 > The trailing slash on `proxy_pass` is critical — it strips the `/ateneo-medico/` prefix so the backend receives clean paths (e.g. `/login`, `/messages`).
 
@@ -372,6 +389,7 @@ Current whitelisted ports:
 | PostgreSQL (shared) | 5432 | TCP |
 | Samba (SMB) | 139, 445 | TCP |
 | Edifica Mailpit UI | 8025 | TCP |
+| Edifica dev Mailpit UI | 8026 | TCP |
 | Hermes dashboard | 9119 | TCP |
 
 > When adding a new service, always update this table and run the `ufw allow` command before testing connectivity.
