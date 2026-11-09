@@ -34,11 +34,8 @@ services:
       - N8N_PUSH_BACKEND=websocket
       - N8N_TRUST_PROXY=true
       - N8N_PROXY_HOPS=1
-      # Assistant / Agents code sandbox (self-hosted n8n-sandbox, see below)
-      - N8N_INSTANCE_AI_SANDBOX_ENABLED=true
-      - N8N_INSTANCE_AI_SANDBOX_PROVIDER=n8n-sandbox
-      - N8N_SANDBOX_SERVICE_URL=http://sandbox-api:8080
-      - N8N_SANDBOX_SERVICE_API_KEY=${N8N_SANDBOX_SERVICE_API_KEY:?}
+      # Assistant / Agents code sandbox: connection (provider, URL http://sandbox-api:8080, key)
+      # is set in the UI (instance AI settings), NOT here: env-managed fields can't be edited there.
       - N8N_INSTANCE_AI_MODEL_API_KEY=${N8N_INSTANCE_AI_MODEL_API_KEY:-}
       - N8N_INSTANCE_AI_SEARXNG_URL=http://searxng:8080
     volumes:
