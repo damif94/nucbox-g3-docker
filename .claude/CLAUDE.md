@@ -270,6 +270,7 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 | radarr | 7878 | — |
 | bazarr | 6767 | — |
 | prowlarr | 9696 | — |
+| seerr | 5055 | running (request manager; Emby + Sonarr/Radarr) |
 | cloudflare-ddns | — | — |
 | postgres (shared) | 5432 | running |
 | samba | 139, 445 | running (SMB share of `/mnt/toshiba`) |
@@ -399,6 +400,7 @@ Current whitelisted ports:
 | Radarr | 7878 | TCP |
 | Bazarr | 6767 | TCP |
 | Prowlarr | 9696 | TCP |
+| Seerr | 5055 | TCP |
 | Evolution API | 8088 | TCP |
 | MeTube | 8081 | TCP |
 | MCP Gateway | 4781 | TCP |
