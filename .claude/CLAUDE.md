@@ -220,6 +220,22 @@ skills go to the hermes repo, and so do docs: see its README.
   192.168.0.0/24" list on a publicly-resolving host blocks the LAN too. The fix is a DNS record pointing at the
   private IP, with a DNS-challenge certificate.
 
+#### n8n (+ Assistant code sandbox)
+
+`n8n/docker-compose.yml`: n8n, its own Postgres (`n8n-postgres`) and the stack behind the n8n Assistant/Agents.
+
+- n8n has watchtower enabled (weekly, unscoped). `n8n-postgres` is deliberately **not** auto-updated.
+  Before a big jump, dump the DB (`pg_dump` into `/srv/data/n8n/backups/`): n8n migrations are one-way.
+- **Code sandbox** = self-hosted `n8n-sandbox-service`: `sandbox-certs` (one-shot mTLS certs), `sandbox-api`
+  and `sandbox-runner-1`, a **privileged Docker-in-Docker** container that runs the AI-generated code.
+  Images share one release (`N8N_SANDBOX_VERSION` in `.env`, pinned, no watchtower): bump all three together.
+- **Never publish ports** of the sandbox services or `searxng`; they live on `sandbox_network` and n8n reaches
+  them by service name. n8n's own settings: `N8N_INSTANCE_AI_SANDBOX_*`, `N8N_SANDBOX_SERVICE_*`.
+- `searxng` is the Assistant's web search (`N8N_INSTANCE_AI_SEARXNG_URL`); `searxng-settings.yml` enables its JSON API.
+- The sandbox on/off switch is also stored in n8n's DB and **overrides the env**: if the log says
+  `Sandbox: enabled=false (DB override ...)`, enable it in the instance AI settings in the UI.
+- Assistant model key: `N8N_INSTANCE_AI_MODEL_API_KEY` in `.env` (Anthropic/OpenAI/OpenRouter), or set in the UI.
+
 #### Samba (SMB) share of the Toshiba drive
 
 The `samba` service (`samba/docker-compose.yml`, image `dperson/samba`) exports the whole Toshiba drive root (`/mnt/toshiba`) as a read-write SMB share named **`toshiba`**, so it can be mounted on a desktop and used with native drag-and-drop.
@@ -242,7 +258,7 @@ Services start independently: `cd <service> && docker compose --env-file ../.env
 | portainer | 9000 | running |
 | nginx (Proxy Manager) | 80, 81, 443 | running |
 | watchtower | — | running (weekly; `watchtower-own` hourly for own images) |
-| n8n | 5678 | running |
+| n8n | 5678 | running (+ sandbox-api/runner, searxng: internal only) |
 | mcp-router | 4781 | running |
 | mcp-server | — (internal) | running |
 | evolution-api | 8088 | — |

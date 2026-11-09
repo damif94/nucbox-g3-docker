@@ -3,6 +3,8 @@ services:
     image: n8nio/n8n:latest
     container_name: n8n
     restart: unless-stopped
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
     user: "1000:1000"
     # Use reliable public resolvers instead of the router (192.168.0.1) for
     # outbound lookups. The router's DNS forwarder over WiFi was jittering
@@ -32,15 +34,25 @@ services:
       - N8N_PUSH_BACKEND=websocket
       - N8N_TRUST_PROXY=true
       - N8N_PROXY_HOPS=1
+      # Assistant / Agents code sandbox (self-hosted n8n-sandbox, see below)
+      - N8N_INSTANCE_AI_SANDBOX_ENABLED=true
+      - N8N_INSTANCE_AI_SANDBOX_PROVIDER=n8n-sandbox
+      - N8N_SANDBOX_SERVICE_URL=http://sandbox-api:8080
+      - N8N_SANDBOX_SERVICE_API_KEY=${N8N_SANDBOX_SERVICE_API_KEY:?}
+      - N8N_INSTANCE_AI_MODEL_API_KEY=${N8N_INSTANCE_AI_MODEL_API_KEY:-}
+      - N8N_INSTANCE_AI_SEARXNG_URL=http://searxng:8080
     volumes:
       - /srv/data/n8n:/home/node/.n8n
       - /srv/data/media:/home/node/.n8n-files/media
     depends_on:
       n8n-postgres:
         condition: service_healthy
+      sandbox-api:
+        condition: service_healthy
     networks:
       - n8n_network
       - services_shared
+      - sandbox_network
 
   n8n-postgres:
     image: postgres:15-alpine
@@ -60,7 +72,105 @@ services:
       timeout: 5s
       retries: 5
 
+  # --- Code sandbox for the n8n Assistant / Agents (n8n-sandbox-service) ---
+  # API, runner and sandbox images ship as one release: bump N8N_SANDBOX_VERSION
+  # for all three together. No ports are published; n8n reaches sandbox-api by
+  # service name on sandbox_network. The runner is privileged (Docker-in-Docker).
+  # Pinned and not watchtower-managed on purpose (lockstep versions).
+  sandbox-certs:
+    image: ghcr.io/n8n-io/n8n-sandbox-service-api:${N8N_SANDBOX_VERSION:-1.14.0}
+    user: "0:0"
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        bootstrap-mtls.sh --out-dir /tls --api-san sandbox-api
+        --control-san-prefix sandbox-runner --world-readable &&
+        chown -R sandbox-api:sandbox-api /tls/api && chmod -R a+rX /tls
+    environment:
+      - NUM_RUNNERS=1
+    volumes:
+      - sandbox-tls:/tls
+    networks:
+      - sandbox_network
+
+  sandbox-api:
+    image: ghcr.io/n8n-io/n8n-sandbox-service-api:${N8N_SANDBOX_VERSION:-1.14.0}
+    restart: unless-stopped
+    depends_on:
+      sandbox-certs:
+        condition: service_completed_successfully
+    environment:
+      - SANDBOX_API_KEYS=${N8N_SANDBOX_SERVICE_API_KEY:?}
+      - SANDBOX_API_RUNNER_REGISTRATION_TOKEN=${SANDBOX_RUNNER_REGISTRATION_TOKEN:?}
+      - SANDBOX_RUNNER_REGISTRATION_TOKEN=${SANDBOX_RUNNER_REGISTRATION_TOKEN:?}
+      - SANDBOX_API_RUNNER_API_KEY=${SANDBOX_RUNNER_API_KEY:?}
+      - SANDBOX_RUNNER_API_KEYS=${SANDBOX_RUNNER_API_KEY:?}
+      - SANDBOX_API_GRPC_TLS_CERT_FILE=/tls/api/grpc-server.crt
+      - SANDBOX_API_GRPC_TLS_KEY_FILE=/tls/api/grpc-server.key
+      - SANDBOX_API_GRPC_TLS_CLIENT_CA_FILE=/tls/api/ca.crt
+      - SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_CA_FILE=/tls/api/ca.crt
+      - SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_CERT_FILE=/tls/api/control-grpc-api-client.crt
+      - SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_KEY_FILE=/tls/api/control-grpc-api-client.key
+      - SANDBOX_API_RUNNER_CONTROL_GRPC_TLS_SERVER_NAME=sandbox-runner-1
+    volumes:
+      - sandbox-tls:/tls:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/healthz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    networks:
+      - sandbox_network
+
+  sandbox-runner-1:
+    image: ghcr.io/n8n-io/n8n-sandbox-service-runner-dind:${N8N_SANDBOX_VERSION:-1.14.0}
+    restart: unless-stopped
+    privileged: true
+    stop_grace_period: 90s
+    depends_on:
+      sandbox-api:
+        condition: service_healthy
+    environment:
+      - SANDBOX_RUNNER_API_KEYS=${SANDBOX_RUNNER_API_KEY:?}
+      - SANDBOX_RUNNER_REGISTRATION_TOKEN=${SANDBOX_RUNNER_REGISTRATION_TOKEN:?}
+      - SANDBOX_RUNNER_API_GRPC_ADDR=sandbox-api:9090
+      - SANDBOX_RUNNER_HTTP_BASE_URL=https://sandbox-runner-1:8080
+      - SANDBOX_RUNNER_CONTROL_GRPC_LISTEN_ADDR=:9091
+      - SANDBOX_RUNNER_CONTROL_GRPC_ADVERTISE_ADDR=sandbox-runner-1:9091
+      - SANDBOX_RUNNER_ID=runner-1
+      - SANDBOX_RUNNER_DOCKER_SANDBOX_IMAGE=ghcr.io/n8n-io/n8n-sandbox-service-sandbox:${N8N_SANDBOX_VERSION:-1.14.0}
+      - SANDBOX_RUNNER_REGISTRATION_GRPC_CA_FILE=/tls/runner/ca.crt
+      - SANDBOX_RUNNER_REGISTRATION_GRPC_CERT_FILE=/tls/runner/grpc-client.crt
+      - SANDBOX_RUNNER_REGISTRATION_GRPC_KEY_FILE=/tls/runner/grpc-client.key
+      - SANDBOX_RUNNER_REGISTRATION_GRPC_SERVER_NAME=sandbox-api
+      - SANDBOX_RUNNER_CONTROL_GRPC_TLS_CERT_FILE=/tls/runner/control-grpc-server.crt
+      - SANDBOX_RUNNER_CONTROL_GRPC_TLS_KEY_FILE=/tls/runner/control-grpc-server.key
+      - SANDBOX_RUNNER_CONTROL_GRPC_TLS_CLIENT_CA_FILE=/tls/runner/ca.crt
+    volumes:
+      - sandbox-tls:/tls:ro
+    networks:
+      - sandbox_network
+
+  # Web search backend for the Assistant. Internal-only: never publish its port.
+  searxng:
+    image: ghcr.io/searxng/searxng:latest
+    restart: unless-stopped
+    environment:
+      - SEARXNG_SECRET=${SEARXNG_SECRET:?}
+    volumes:
+      - ./searxng-settings.yml:/etc/searxng/settings.yml:ro
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    networks:
+      - sandbox_network
+
+volumes:
+  sandbox-tls:
+
 networks:
+  sandbox_network:
+    driver: bridge
   n8n_network:
     driver: bridge
   services_shared:
