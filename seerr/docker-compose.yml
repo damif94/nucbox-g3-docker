@@ -1,0 +1,21 @@
+services:
+  seerr:
+    image: ghcr.io/seerr-team/seerr:latest
+    container_name: seerr
+    init: true
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+    restart: unless-stopped
+    environment:
+      - TZ=America/Montevideo
+      - PORT=5055
+    volumes:
+      - /home/damian/docker/seerr/config:/app/config
+    ports:
+      - "5055:5055"
+    networks:
+      - media
+
+networks:
+  media:
+    external: true
